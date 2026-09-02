@@ -406,7 +406,7 @@ export const DataModal: React.FC<DataModalProps> = ({
                   <span>Restore Default Database</span>
                 </div>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Restore the original 67 entries and permanently delete all{' '}
+                  Permanently delete all entries in your collection and all{' '}
                   {Object.keys(notes).length} personal notes in this browser.
                 </p>
               </div>

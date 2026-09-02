@@ -373,7 +373,7 @@ export default function App() {
     setCollectionEntries(result);
     setSelectedMinYear(1980);
     setSelectedMaxYear(2026);
-    showToast('Restored initial 67 anime tracks');
+    showToast('Collection reset to empty');
   };
 
   const handleSaveNote = (song: NoteableSong, text: string) => {
