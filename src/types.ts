@@ -1,5 +1,7 @@
 export interface AnimeSongEntry {
   id: number;
+  /** Stable catalog identifier when this collection entry was copied from the catalog. */
+  source_song_id?: string | number;
   anime_name: string;
   anime_year: number;
   artist: string;
@@ -21,6 +23,33 @@ export interface AnimeSongItem {
   anime_vintage?: string | null;
   source?: 'anisongdb' | 'animethemes' | 'collection';
 }
+
+/**
+ * The song metadata kept alongside a browser-only note. Keeping a snapshot lets
+ * the Notes view continue to render even when a song is no longer in the local
+ * collection or the catalog is temporarily unavailable.
+ */
+export interface NoteSongSnapshot {
+  id: string | number;
+  anime_name: string;
+  anime_year: number;
+  artist: string;
+  song_name: string;
+  theme_type?: string;
+  video_url?: string | null;
+  audio_url?: string | null;
+  anilist_id?: number | null;
+  source?: 'anisongdb' | 'animethemes' | 'collection';
+}
+
+export interface PersonalSongNote {
+  songKey: string;
+  text: string;
+  updatedAt: string;
+  song: NoteSongSnapshot;
+}
+
+export type NoteMap = Record<string, PersonalSongNote>;
 
 export type SortKey = 'id' | 'anime_name' | 'anime_year' | 'theme_type' | 'artist' | 'song_name';
 export type SortOrder = 'asc' | 'desc';
@@ -57,4 +86,4 @@ export interface AnimeDetails {
   studio?: string;
 }
 
-export type DatabaseMode = 'anisongdb' | 'collection' | 'animethemes';
+export type DatabaseMode = 'anisongdb' | 'collection' | 'animethemes' | 'notes';

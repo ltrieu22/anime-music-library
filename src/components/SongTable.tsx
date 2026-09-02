@@ -11,9 +11,10 @@ import {
   Disc,
   BookmarkPlus,
   Check,
-  Sparkles,
+  StickyNote,
 } from 'lucide-react';
-import { AnimeSongEntry, AnimeSongItem, SortKey, SortOrder } from '../types';
+import { AnimeSongEntry, AnimeSongItem, NoteMap, SortKey, SortOrder } from '../types';
+import { findNoteForSong, getSongNoteKey } from '../services/notesStorage';
 import { AnimeHoverCard } from './AnimeHoverCard';
 
 interface SongTableProps {
@@ -29,7 +30,38 @@ interface SongTableProps {
   onSaveToCollection?: (song: AnimeSongItem) => void;
   savedSongKeys?: Set<string>;
   onPlayVideo?: (song: AnimeSongItem) => void;
+  notes: NoteMap;
+  onEditNote: (song: AnimeSongEntry | AnimeSongItem) => void;
+  isNotesMode?: boolean;
 }
+
+const NOTE_SNIPPET_LENGTH = 110;
+
+const getNoteSnippet = (text: string, query: string) => {
+  const compactText = text.replace(/\s+/g, ' ').trim();
+  if (compactText.length <= NOTE_SNIPPET_LENGTH) return compactText;
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  let matchIndex = normalizedQuery
+    ? compactText.toLocaleLowerCase().indexOf(normalizedQuery)
+    : -1;
+
+  if (matchIndex < 0 && normalizedQuery) {
+    const termIndexes = normalizedQuery
+      .split(/\s+/)
+      .map((term) => compactText.toLocaleLowerCase().indexOf(term))
+      .filter((index) => index >= 0);
+    matchIndex = termIndexes.length > 0 ? Math.min(...termIndexes) : -1;
+  }
+
+  let start = matchIndex >= 0 ? Math.max(0, matchIndex - 32) : 0;
+  let end = Math.min(compactText.length, start + NOTE_SNIPPET_LENGTH);
+
+  if (end === compactText.length) start = Math.max(0, end - NOTE_SNIPPET_LENGTH);
+
+  const snippet = compactText.slice(start, end).trim();
+  return `${start > 0 ? '…' : ''}${snippet}${end < compactText.length ? '…' : ''}`;
+};
 
 export const SongTable: React.FC<SongTableProps> = ({
   entries,
@@ -44,6 +76,9 @@ export const SongTable: React.FC<SongTableProps> = ({
   onSaveToCollection,
   savedSongKeys = new Set(),
   onPlayVideo,
+  notes,
+  onEditNote,
+  isNotesMode = false,
 }) => {
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
 
@@ -53,11 +88,18 @@ export const SongTable: React.FC<SongTableProps> = ({
     const str = String(text);
     if (!query.trim()) return str;
 
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const escapedTerms = query
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+      .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+    const exactMatch = new RegExp(`^(?:${escapedTerms.join('|')})$`, 'i');
     const parts = str.split(regex);
 
     return parts.map((part, i) =>
-      regex.test(part) ? (
+      exactMatch.test(part) ? (
         <mark
           key={i}
           className="bg-emerald-500/30 text-emerald-300 font-semibold px-0.5 rounded"
@@ -112,10 +154,18 @@ export const SongTable: React.FC<SongTableProps> = ({
         <div className="w-12 h-12 mx-auto rounded-full bg-neutral-800 flex items-center justify-center text-neutral-500 mb-3">
           <Music2 className="w-6 h-6" />
         </div>
-        <h3 className="text-base font-semibold text-neutral-200">No anime songs found</h3>
+        <h3 className="text-base font-semibold text-neutral-200">
+          {isNotesMode ? 'No personal notes found' : 'No anime songs found'}
+        </h3>
         <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto">
           {searchQuery
-            ? `No tracks matching "${searchQuery}" in this year/type filter.`
+            ? isNotesMode
+              ? `No personal notes matching "${searchQuery}" in this year range.`
+              : isCatalogMode
+                ? `No tracks matching "${searchQuery}" in these year/type filters.`
+                : `No collection songs matching "${searchQuery}" in this year range.`
+            : isNotesMode
+            ? 'No personal notes match these filters. Add one from Catalog or My Collection.'
             : isCatalogMode
             ? 'No tracks found in the catalog. Try broadening your year range or theme filter.'
             : 'Your collection is currently empty. Switch to the catalog or add songs to get started.'}
@@ -196,7 +246,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                 </div>
               </th>
 
-              <th className="py-3 px-4 w-32 text-right">Actions</th>
+              <th className="py-3 px-4 w-36 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/80 text-sm">
@@ -204,10 +254,13 @@ export const SongTable: React.FC<SongTableProps> = ({
               const songKey = `${(item.anime_name || '').toLowerCase()}:::${(item.song_name || '').toLowerCase()}`;
               const isSaved = savedSongKeys.has(songKey);
               const hasMedia = Boolean(item.video_url || (item as any).audio_url);
+              const note = findNoteForSong(notes, item);
+              const hasNote = Boolean(note?.text.trim());
+              const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
 
               return (
                 <tr
-                  key={item.id}
+                  key={rowKey}
                   className="hover:bg-neutral-800/40 transition-colors group"
                 >
                   <td className="py-3 px-4 text-xs font-mono text-neutral-500">
@@ -288,11 +341,32 @@ export const SongTable: React.FC<SongTableProps> = ({
                         <span className="text-neutral-600 italic">—</span>
                       )}
                     </div>
+                    {hasNote && note && (
+                      <div className="mt-1 flex items-start gap-1.5 max-w-md text-[11px] leading-4 text-amber-200/80">
+                        <StickyNote className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-300 fill-amber-300/20" />
+                        <span className="min-w-0 truncate" title={note.text}>
+                          {highlightText(getNoteSnippet(note.text, searchQuery), searchQuery)}
+                        </span>
+                      </div>
+                    )}
                   </td>
 
                   {/* Actions column */}
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => onEditNote(item)}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          hasNote
+                            ? 'text-amber-300 bg-amber-950/40 hover:bg-amber-950/70'
+                            : 'text-neutral-400 hover:text-amber-300 hover:bg-neutral-800'
+                        }`}
+                        title={hasNote ? 'Edit personal note' : 'Add personal note'}
+                        aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || item.anime_name}`}
+                      >
+                        <StickyNote className={`w-3.5 h-3.5 ${hasNote ? 'fill-amber-300/20' : ''}`} />
+                      </button>
                       {isCatalogMode ? (
                         /* Save to Collection button */
                         <button
@@ -380,9 +454,12 @@ export const SongTable: React.FC<SongTableProps> = ({
           const songKey = `${(item.anime_name || '').toLowerCase()}:::${(item.song_name || '').toLowerCase()}`;
           const isSaved = savedSongKeys.has(songKey);
           const hasMedia = Boolean(item.video_url || (item as any).audio_url);
+          const note = findNoteForSong(notes, item);
+          const hasNote = Boolean(note?.text.trim());
+          const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
 
           return (
-            <div key={item.id} className="p-4 space-y-2.5">
+            <div key={rowKey} className="p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-mono text-neutral-500 mr-2">
@@ -440,13 +517,35 @@ export const SongTable: React.FC<SongTableProps> = ({
                 </div>
               </div>
 
+              {hasNote && note && (
+                <div className="flex items-start gap-1.5 rounded-lg border border-amber-900/40 bg-amber-950/20 px-2.5 py-2 text-[11px] leading-4 text-amber-100/80">
+                  <StickyNote className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-300 fill-amber-300/20" />
+                  <span className="min-w-0 line-clamp-2" title={note.text}>
+                    {highlightText(getNoteSnippet(note.text, searchQuery), searchQuery)}
+                  </span>
+                </div>
+              )}
+
               <div className="text-xs text-neutral-400 flex items-center justify-between pt-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 mr-2">
                   <User className="w-3 h-3 text-neutral-500" />
-                  <span>{highlightText(item.artist || 'Unknown Artist', searchQuery)}</span>
+                  <span className="truncate">{highlightText(item.artist || 'Unknown Artist', searchQuery)}</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onEditNote(item)}
+                    className={`w-11 h-11 inline-flex items-center justify-center rounded-lg transition-colors ${
+                      hasNote
+                        ? 'text-amber-300 bg-amber-950/50'
+                        : 'text-neutral-400 hover:text-amber-300 bg-neutral-800'
+                    }`}
+                    title={hasNote ? 'Edit personal note' : 'Add personal note'}
+                    aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || item.anime_name}`}
+                  >
+                    <StickyNote className={`w-3.5 h-3.5 ${hasNote ? 'fill-amber-300/20' : ''}`} />
+                  </button>
                   {isCatalogMode ? (
                     <button
                       onClick={() => onSaveToCollection && onSaveToCollection(item as AnimeSongItem)}
@@ -489,4 +588,3 @@ export const SongTable: React.FC<SongTableProps> = ({
     </div>
   );
 };
-

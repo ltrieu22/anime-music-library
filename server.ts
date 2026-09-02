@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 
 interface AnimeSongEntry {
   id: number;
+  source_song_id?: string | number;
   anime_name: string;
   anime_year: number;
   artist: string;
@@ -18,6 +19,16 @@ const DATA_FILE = path.join(DATA_DIR, 'entries.json');
 // In-memory cache for API searches (TTL 1 hour)
 const searchCache = new Map<string, { timestamp: number; data: any }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
+
+function normalizeSourceSongId(value: unknown): string | number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+  return undefined;
+}
 
 function loadEntries(): AnimeSongEntry[] {
   try {
@@ -65,15 +76,17 @@ async function startServer() {
 
   // Add new entry
   app.post('/api/entries', (req, res) => {
-    const { anime_name, anime_year, artist, song_name } = req.body;
+    const { anime_name, anime_year, artist, song_name, source_song_id } = req.body;
     if (!anime_name || !anime_name.trim()) {
       return res.status(400).json({ error: 'Anime name is required' });
     }
 
     const entries = loadEntries();
     const maxId = entries.length > 0 ? Math.max(...entries.map((e) => e.id || 0)) : 0;
+    const sourceSongId = normalizeSourceSongId(source_song_id);
     const newEntry: AnimeSongEntry = {
       id: maxId + 1,
+      ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
       anime_name: anime_name.trim(),
       anime_year: Number(anime_year) || new Date().getFullYear(),
       artist: (artist || '').trim(),
@@ -88,7 +101,8 @@ async function startServer() {
   // Update entry
   app.put('/api/entries/:id', (req, res) => {
     const id = Number(req.params.id);
-    const { anime_name, anime_year, artist, song_name } = req.body;
+    const { anime_name, anime_year, artist, song_name, source_song_id } = req.body;
+    const sourceSongId = normalizeSourceSongId(source_song_id);
 
     const entries = loadEntries();
     const idx = entries.findIndex((e) => e.id === id);
@@ -98,6 +112,9 @@ async function startServer() {
 
     entries[idx] = {
       ...entries[idx],
+      ...(source_song_id !== undefined && sourceSongId !== undefined
+        ? { source_song_id: sourceSongId }
+        : {}),
       anime_name: anime_name !== undefined ? anime_name.trim() : entries[idx].anime_name,
       anime_year: anime_year !== undefined ? Number(anime_year) || entries[idx].anime_year : entries[idx].anime_year,
       artist: artist !== undefined ? artist.trim() : entries[idx].artist,
@@ -149,13 +166,17 @@ async function startServer() {
       return res.status(400).json({ error: 'Invalid entries format' });
     }
 
-    const validated: AnimeSongEntry[] = entries.map((e, index) => ({
-      id: Number(e.id) || index + 1,
-      anime_name: String(e.anime_name || '').trim(),
-      anime_year: Number(e.anime_year) || 2020,
-      artist: String(e.artist || '').trim(),
-      song_name: String(e.song_name || '').trim(),
-    })).filter((e) => e.anime_name.length > 0);
+    const validated: AnimeSongEntry[] = entries.map((e, index) => {
+      const sourceSongId = normalizeSourceSongId(e.source_song_id);
+      return {
+        id: Number(e.id) || index + 1,
+        ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
+        anime_name: String(e.anime_name || '').trim(),
+        anime_year: Number(e.anime_year) || 2020,
+        artist: String(e.artist || '').trim(),
+        song_name: String(e.song_name || '').trim(),
+      };
+    }).filter((e) => e.anime_name.length > 0);
 
     saveEntries(validated);
     res.json({ success: true, count: validated.length });
