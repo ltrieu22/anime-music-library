@@ -21,7 +21,39 @@ export const Header: React.FC<HeaderProps> = ({
   animeThemesCount = 0,
   noteCount = 0,
 }) => {
+  const [avatarSrc, setAvatarSrc] = React.useState<string>(() => {
+    return localStorage.getItem('app_avatar') || '/marcille.png';
+  });
   const [imgHasError, setImgHasError] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleAvatarFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAvatarSrc(dataUrl);
+      setImgHasError(false);
+      try {
+        localStorage.setItem('app_avatar', dataUrl);
+      } catch (err) {
+        console.warn('Avatar localStorage save failed:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleAvatarFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      handleAvatarFile(file);
+    }
+  };
 
   const validYears = entries.map((e) => e.anime_year).filter(Boolean);
   const minYear = validYears.length ? Math.min(...validYears) : 0;
@@ -34,19 +66,37 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
         {/* Navigation & Brand Icon */}
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto min-w-0">
-          {/* Brand Logo (Marcille) */}
-          {!imgHasError ? (
-            <img
-              src="/marcille.png"
-              alt="Marcille"
-              className="h-9 w-auto rounded-lg border border-emerald-500/40 bg-neutral-900 shadow-sm flex-shrink-0"
-              onError={() => setImgHasError(true)}
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-lg border border-emerald-500/40 bg-neutral-900 flex-shrink-0 flex items-center justify-center text-emerald-400">
-              <Disc3 className="w-4 h-4" />
-            </div>
-          )}
+          {/* Top-Left Avatar Icon (Marcille) */}
+          <button
+            type="button"
+            id="brand-avatar-icon"
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            className="w-8 h-8 rounded-lg overflow-hidden border border-emerald-500/40 hover:border-emerald-400 bg-neutral-900 flex-shrink-0 flex items-center justify-center relative cursor-pointer group shadow-sm transition-all"
+            title="Marcille avatar (Click or drop image file to update)"
+            aria-label="Change avatar image"
+          >
+            {!imgHasError ? (
+              <img
+                src={avatarSrc}
+                alt="Marcille"
+                className="w-full h-full object-cover object-top transition-transform group-hover:scale-105"
+                onError={() => setImgHasError(true)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-emerald-500/10 text-emerald-400">
+                <Disc3 className="w-4 h-4" />
+              </div>
+            )}
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleInputChange}
+            accept="image/*"
+            className="hidden"
+          />
 
           {/* Catalog / Collection Switcher */}
           <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1 rounded-lg text-xs font-medium min-w-0 max-w-full overflow-x-auto">
