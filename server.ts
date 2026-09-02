@@ -1,0 +1,568 @@
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+
+interface AnimeSongEntry {
+  id: number;
+  anime_name: string;
+  anime_year: number;
+  artist: string;
+  song_name: string;
+}
+
+const PORT = 3000;
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'entries.json');
+
+// In-memory cache for API searches (TTL 1 hour)
+const searchCache = new Map<string, { timestamp: number; data: any }>();
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+function loadEntries(): AnimeSongEntry[] {
+  try {
+    if (!fs.existsSync(DATA_FILE)) {
+      return [];
+    }
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Failed to load data file:', err);
+    return [];
+  }
+}
+
+// Atomic file write to prevent data corruption
+function saveEntries(entries: AnimeSongEntry[]): boolean {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const tempFile = `${DATA_FILE}.tmp.${Date.now()}`;
+    fs.writeFileSync(tempFile, JSON.stringify(entries, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DATA_FILE);
+    return true;
+  } catch (err) {
+    console.error('Failed to save data file:', err);
+    return false;
+  }
+}
+
+async function startServer() {
+  const app = express();
+  app.use(express.json({ limit: '10mb' }));
+
+  // API Routes
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Get all entries
+  app.get('/api/entries', (req, res) => {
+    const entries = loadEntries();
+    res.json({ data: entries, total: entries.length });
+  });
+
+  // Add new entry
+  app.post('/api/entries', (req, res) => {
+    const { anime_name, anime_year, artist, song_name } = req.body;
+    if (!anime_name || !anime_name.trim()) {
+      return res.status(400).json({ error: 'Anime name is required' });
+    }
+
+    const entries = loadEntries();
+    const maxId = entries.length > 0 ? Math.max(...entries.map((e) => e.id || 0)) : 0;
+    const newEntry: AnimeSongEntry = {
+      id: maxId + 1,
+      anime_name: anime_name.trim(),
+      anime_year: Number(anime_year) || new Date().getFullYear(),
+      artist: (artist || '').trim(),
+      song_name: (song_name || '').trim(),
+    };
+
+    entries.push(newEntry);
+    saveEntries(entries);
+    res.status(201).json({ success: true, entry: newEntry });
+  });
+
+  // Update entry
+  app.put('/api/entries/:id', (req, res) => {
+    const id = Number(req.params.id);
+    const { anime_name, anime_year, artist, song_name } = req.body;
+
+    const entries = loadEntries();
+    const idx = entries.findIndex((e) => e.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    entries[idx] = {
+      ...entries[idx],
+      anime_name: anime_name !== undefined ? anime_name.trim() : entries[idx].anime_name,
+      anime_year: anime_year !== undefined ? Number(anime_year) || entries[idx].anime_year : entries[idx].anime_year,
+      artist: artist !== undefined ? artist.trim() : entries[idx].artist,
+      song_name: song_name !== undefined ? song_name.trim() : entries[idx].song_name,
+    };
+
+    saveEntries(entries);
+    res.json({ success: true, entry: entries[idx] });
+  });
+
+  // Delete entry
+  app.delete('/api/entries/:id', (req, res) => {
+    const id = Number(req.params.id);
+    const entries = loadEntries();
+    const filtered = entries.filter((e) => e.id !== id);
+
+    if (filtered.length === entries.length) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    saveEntries(filtered);
+    res.json({ success: true, deletedId: id });
+  });
+
+  // Reset entries to default
+  app.post('/api/entries/reset', (req, res) => {
+    try {
+      const initialPath = path.join(process.cwd(), 'src', 'data', 'initialData.ts');
+      if (fs.existsSync(initialPath)) {
+        // Load initial data
+        const content = fs.readFileSync(initialPath, 'utf-8');
+        const jsonMatch = content.match(/INITIAL_ANIME_SONGS:\s*AnimeSongEntry\[\]\s*=\s*(\[[\s\S]*?\]);/);
+        if (jsonMatch) {
+          const initial = JSON.parse(jsonMatch[1]);
+          saveEntries(initial);
+          return res.json({ success: true, count: initial.length });
+        }
+      }
+      res.status(500).json({ error: 'Could not restore initial data' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Import entries
+  app.post('/api/entries/import', (req, res) => {
+    const { entries } = req.body;
+    if (!Array.isArray(entries)) {
+      return res.status(400).json({ error: 'Invalid entries format' });
+    }
+
+    const validated: AnimeSongEntry[] = entries.map((e, index) => ({
+      id: Number(e.id) || index + 1,
+      anime_name: String(e.anime_name || '').trim(),
+      anime_year: Number(e.anime_year) || 2020,
+      artist: String(e.artist || '').trim(),
+      song_name: String(e.song_name || '').trim(),
+    })).filter((e) => e.anime_name.length > 0);
+
+    saveEntries(validated);
+    res.json({ success: true, count: validated.length });
+  });
+
+  // Fast Anime Theme Song search proxy
+  // Queries AnimeThemes.moe for OP/ED/Insert songs and artists, plus AniList for cover art
+  app.get('/api/anime/search', async (req, res) => {
+    const query = String(req.query.q || '').trim();
+    if (!query) {
+      return res.json({ results: [] });
+    }
+
+    const cacheKey = query.toLowerCase();
+    const cached = searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return res.json({ results: cached.data, cached: true });
+    }
+
+    try {
+      // 1. Query AnimeThemes API (specialized in OP/ED/Insert themes + song titles + artists)
+      const atUrl = `https://api.animethemes.moe/anime?q=${encodeURIComponent(query)}&include=animethemes.song.artists,images`;
+      const atPromise = fetch(atUrl, {
+        headers: {
+          'User-Agent': 'AnimeSongDB/1.0 (private-use; github.com/ltrieu22/testi_anime_db)',
+          Accept: 'application/json',
+        },
+      }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+      // 2. Query AniList GraphQL for cover image & official english/romaji titles
+      const anilistQuery = `
+        query ($search: String) {
+          Page(page: 1, perPage: 5) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+              id
+              title {
+                romaji
+                english
+                native
+              }
+              seasonYear
+              startDate {
+                year
+              }
+              coverImage {
+                medium
+                large
+              }
+            }
+          }
+        }
+      `;
+      const anilistPromise = fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          query: anilistQuery,
+          variables: { search: query },
+        }),
+      }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+      const [atData, anilistData] = await Promise.all([atPromise, anilistPromise]);
+
+      const anilistMediaList: any[] = anilistData?.data?.Page?.media || [];
+      const anilistMap = new Map<string, any>();
+      for (const m of anilistMediaList) {
+        if (m.title?.romaji) anilistMap.set(m.title.romaji.toLowerCase(), m);
+        if (m.title?.english) anilistMap.set(m.title.english.toLowerCase(), m);
+      }
+
+      const results: any[] = [];
+
+      if (atData?.anime && Array.isArray(atData.anime)) {
+        for (const anime of atData.anime.slice(0, 8)) {
+          const themes = (anime.animethemes || []).map((t: any) => ({
+            type: t.type || 'THEME',
+            sequence: t.sequence,
+            title: t.song?.title || 'Unknown Title',
+            artist: (t.song?.artists || []).map((a: any) => a.name).join(', ') || 'Unknown Artist',
+          }));
+
+          // Try finding cover in AnimeThemes or fallback to AniList
+          let coverImage: string | undefined = undefined;
+          if (anime.images && Array.isArray(anime.images) && anime.images.length > 0) {
+            const largeCover = anime.images.find((img: any) => img.facet === 'Large Cover');
+            coverImage = largeCover ? largeCover.link : anime.images[0].link;
+          }
+
+          if (!coverImage) {
+            const matchedAni = anilistMap.get(anime.name.toLowerCase());
+            if (matchedAni) {
+              coverImage = matchedAni.coverImage?.large || matchedAni.coverImage?.medium;
+            }
+          }
+
+          results.push({
+            id: anime.id,
+            name: anime.name,
+            year: anime.year || null,
+            coverImage,
+            themes,
+          });
+        }
+      }
+
+      // If AnimeThemes returned nothing or few results, also add AniList results as suggestions
+      if (results.length === 0 && anilistMediaList.length > 0) {
+        for (const m of anilistMediaList) {
+          results.push({
+            id: `al-${m.id}`,
+            name: m.title?.english || m.title?.romaji,
+            year: m.seasonYear || m.startDate?.year || null,
+            coverImage: m.coverImage?.large || m.coverImage?.medium,
+            themes: [], // AniList does not store OP/ED tracks
+          });
+        }
+      }
+
+      searchCache.set(cacheKey, { timestamp: Date.now(), data: results });
+      res.json({ results, cached: false });
+    } catch (err: any) {
+      console.error('Anime search error:', err);
+      res.status(500).json({ error: 'Search failed', message: err.message });
+    }
+  });
+
+  // Anime Cover & Details Endpoint (AniList GraphQL with in-memory caching)
+  const coverCache = new Map<string, { timestamp: number; data: any }>();
+  const COVER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+  app.get('/api/anime/cover', async (req, res) => {
+    const title = String(req.query.title || '').trim();
+    const anilistId = req.query.id ? Number(req.query.id) : null;
+    if (!title && !anilistId) {
+      return res.status(400).json({ error: 'Title or AniList ID is required' });
+    }
+
+    const cacheKey = anilistId ? `id_${anilistId}` : title.toLowerCase();
+    const cached = coverCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < COVER_CACHE_TTL) {
+      return res.json({ data: cached.data, cached: true });
+    }
+
+    try {
+      const anilistQuery = `
+        query ($search: String, $id: Int) {
+          Media(search: $search, id: $id, type: ANIME) {
+            id
+            title {
+              romaji
+              english
+              native
+            }
+            coverImage {
+              large
+              medium
+              color
+            }
+            bannerImage
+            format
+            season
+            seasonYear
+            startDate {
+              year
+            }
+            episodes
+            genres
+            averageScore
+            studios(isMain: true) {
+              nodes {
+                name
+              }
+            }
+          }
+        }
+      `;
+
+      const variables: any = {};
+      if (anilistId) {
+        variables.id = anilistId;
+      } else {
+        variables.search = title;
+      }
+
+      const response = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          query: anilistQuery,
+          variables,
+        }),
+      });
+
+      if (!response.ok) {
+        return res.json({ data: { anime: title || `Anime #${anilistId}` } });
+      }
+
+      const json = await response.json();
+      const media = json?.data?.Media;
+
+      if (!media) {
+        const fallback = { anime: title || `Anime #${anilistId}` };
+        coverCache.set(cacheKey, { timestamp: Date.now(), data: fallback });
+        return res.json({ data: fallback });
+      }
+
+      const result = {
+        anime: title || media.title?.english || media.title?.romaji,
+        romaji: media.title?.romaji || title,
+        english: media.title?.english || null,
+        native: media.title?.native || null,
+        coverImage: media.coverImage?.large || media.coverImage?.medium || null,
+        bannerImage: media.bannerImage || null,
+        year: media.seasonYear || media.startDate?.year || null,
+        season: media.season || null,
+        format: media.format || null,
+        genres: media.genres || [],
+        score: media.averageScore || null,
+        episodes: media.episodes || null,
+        studio: media.studios?.nodes?.[0]?.name || null,
+      };
+
+      coverCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      if (title && !coverCache.has(title.toLowerCase())) {
+        coverCache.set(title.toLowerCase(), { timestamp: Date.now(), data: result });
+      }
+      res.json({ data: result, cached: false });
+    } catch (err: any) {
+      console.error('Failed to fetch anime cover details:', err);
+      res.json({ data: { anime: title || 'Unknown Anime' } });
+    }
+  });
+
+  // 100% Local Self-Contained Anime Music Catalog with Artist Group & Member Knowledge
+  const CATALOG_FILE = path.join(DATA_DIR, 'anime_catalog.json');
+  const ALIAS_FILE = path.join(DATA_DIR, 'artist_aliases.json');
+  let localCatalog: any[] = [];
+  let artistAliases: Record<string, string[]> = {};
+
+  const loadLocalCatalog = () => {
+    try {
+      if (fs.existsSync(CATALOG_FILE)) {
+        localCatalog = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8'));
+      }
+    } catch (err) {
+      console.error('Failed to load local anime catalog:', err);
+    }
+    return localCatalog;
+  };
+  loadLocalCatalog();
+
+  const loadArtistAliases = () => {
+    try {
+      if (fs.existsSync(ALIAS_FILE)) {
+        artistAliases = JSON.parse(fs.readFileSync(ALIAS_FILE, 'utf-8'));
+      }
+    } catch (err) {
+      console.error('Failed to load artist aliases:', err);
+    }
+    return artistAliases;
+  };
+  loadArtistAliases();
+
+  const handleLocalCatalog = async (req: express.Request, res: express.Response) => {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const yearMin = req.query.yearMin ? Number(req.query.yearMin) : null;
+    const yearMax = req.query.yearMax ? Number(req.query.yearMax) : null;
+    const themeType = String(req.query.themeType || 'all').toUpperCase(); // ALL, OP, ED, IN
+    const sortKey = String(req.query.sortKey || 'anime_year');
+    const sortOrder = String(req.query.sortOrder || 'desc').toLowerCase(); // 'asc' or 'desc'
+    const limit = Math.min(500, Math.max(10, Number(req.query.limit) || (q ? 250 : 80)));
+
+    try {
+      let filtered = localCatalog.length > 0 ? localCatalog : loadLocalCatalog();
+
+      // Filter by search query (anime, artist, or song name) + artist group/member expansion
+      if (q) {
+        // Collect related artist names, units, and group members
+        const relatedArtistTerms = new Set<string>();
+        for (const [key, aliases] of Object.entries(artistAliases)) {
+          if (q.includes(key) || key.includes(q)) {
+            aliases.forEach((a) => relatedArtistTerms.add(a.toLowerCase()));
+          }
+        }
+
+        const queryTerms = q.split(/\s+/).filter(Boolean);
+        filtered = filtered.filter((item) => {
+          const anime = (item.anime_name || '').toLowerCase();
+          const artist = (item.artist || '').toLowerCase();
+          const song = (item.song_name || '').toLowerCase();
+          const combined = `${anime} ${artist} ${song}`;
+
+          // Standard match (all typed terms present)
+          if (queryTerms.every((term) => combined.includes(term))) {
+            return true;
+          }
+
+          // Artist group / member cross-match (e.g. searching Masayoshi Oishi matches OxT songs)
+          for (const rel of relatedArtistTerms) {
+            if (artist.includes(rel)) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+      }
+
+      // Filter by year range
+      if (yearMin !== null || yearMax !== null) {
+        filtered = filtered.filter((item) => {
+          const y = Number(item.anime_year);
+          if (!y) return true;
+          if (yearMin !== null && y < yearMin) return false;
+          if (yearMax !== null && y > yearMax) return false;
+          return true;
+        });
+      }
+
+      // Filter by theme type (Opening, Ending, Insert)
+      if (themeType && themeType !== 'ALL') {
+        filtered = filtered.filter((item) => {
+          const t = (item.theme_type || '').toUpperCase();
+          if (themeType === 'OP') return t.startsWith('OP') || t.includes('OPENING');
+          if (themeType === 'ED') return t.startsWith('ED') || t.includes('ENDING');
+          if (themeType === 'IN') return t.startsWith('IN') || t.includes('INSERT');
+          return true;
+        });
+      }
+
+      // Sort entire filtered dataset before slicing
+      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+      filtered = [...filtered].sort((a, b) => {
+        let valA = (a as any)[sortKey];
+        let valB = (b as any)[sortKey];
+
+        if (sortKey === 'anime_year') {
+          const numA = Number(valA) || 0;
+          const numB = Number(valB) || 0;
+          if (numA !== numB) {
+            return sortOrder === 'asc' ? numA - numB : numB - numA;
+          }
+          return collator.compare(String(a.anime_name || ''), String(b.anime_name || ''));
+        }
+
+        if (sortKey === 'id') {
+          const numA = typeof valA === 'string' ? parseInt(valA.replace(/\D/g, ''), 10) : Number(valA);
+          const numB = typeof valB === 'string' ? parseInt(valB.replace(/\D/g, ''), 10) : Number(valB);
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return sortOrder === 'asc' ? numA - numB : numB - numA;
+          }
+        }
+
+        if (valA === undefined || valA === null) return sortOrder === 'asc' ? 1 : -1;
+        if (valB === undefined || valB === null) return sortOrder === 'asc' ? -1 : 1;
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return sortOrder === 'asc' ? valA - valB : valB - valA;
+        }
+
+        const cmp = collator.compare(String(valA), String(valB));
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
+
+      const total = filtered.length;
+      const paginated = filtered.slice(0, limit);
+
+      res.json({
+        data: paginated,
+        total,
+        hasMore: total > limit,
+        source: 'local',
+      });
+    } catch (err: any) {
+      console.error('Local catalog query error:', err);
+      res.status(500).json({ error: 'Failed to query catalog', message: err.message, data: [] });
+    }
+  };
+
+  app.get('/api/catalog/songs', handleLocalCatalog);
+  app.get('/api/anisongdb/songs', handleLocalCatalog);
+  app.get('/api/animethemes/songs', handleLocalCatalog);
+
+  // Vite middleware setup
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

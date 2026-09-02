@@ -1,0 +1,6 @@
+{
+  "name": "Anime Song Database",
+  "description": "Fast anime theme and song catalog with local tracks, year filters, and cover art.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
