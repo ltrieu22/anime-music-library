@@ -14,7 +14,7 @@ export interface AnimeSongItem {
   anime_year: number;
   artist: string;
   song_name: string;
-  theme_type?: string; // OP1, ED2, Insert Song, etc.
+  theme_type?: string;
   video_url?: string | null;
   audio_url?: string | null;
   anilist_id?: number | null;
@@ -22,7 +22,7 @@ export interface AnimeSongItem {
   source?: 'anisongdb' | 'animethemes' | 'collection';
 }
 
-export type SortKey = 'id' | 'anime_name' | 'anime_year' | 'artist' | 'song_name';
+export type SortKey = 'id' | 'anime_name' | 'anime_year' | 'theme_type' | 'artist' | 'song_name';
 export type SortOrder = 'asc' | 'desc';
 
 export interface ThemeSongItem {
@@ -41,6 +41,7 @@ export interface AnimeSearchResult {
 }
 
 export interface AnimeDetails {
+  id?: number | null;
   anime: string;
   romaji?: string;
   english?: string;
@@ -57,4 +58,3 @@ export interface AnimeDetails {
 }
 
 export type DatabaseMode = 'anisongdb' | 'collection' | 'animethemes';
-

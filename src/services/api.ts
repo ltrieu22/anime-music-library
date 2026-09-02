@@ -222,7 +222,7 @@ export async function searchAnime(query: string): Promise<AnimeSearchResult[]> {
   }
 }
 
-// Fetch Anime Cover & Details (AniList GraphQL proxy with direct client fallback)
+// Fetch Anime Cover & Details (Server API + AniList GraphQL + Kitsu fallback)
 export async function fetchAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
   if (isServerApiAvailable !== false) {
     try {
@@ -234,14 +234,16 @@ export async function fetchAnimeCoverDetails(animeTitle: string, anilistId?: num
       if (res.ok) {
         const json = await res.json();
         isServerApiAvailable = true;
-        return json.data;
+        if (json.data?.coverImage) {
+          return json.data;
+        }
       }
     } catch {
       // Server unreachable, proceed to client fallback
     }
   }
 
-  // Client-side direct AniList GraphQL query (works 100% on static GitHub Pages)
+  // Client-side direct AniList GraphQL query (works on static GitHub Pages)
   try {
     const query = `
       query ($search: String, $id: Int) {
@@ -274,8 +276,9 @@ export async function fetchAnimeCoverDetails(animeTitle: string, anilistId?: num
     if (res.ok) {
       const json = await res.json();
       const media = json?.data?.Media;
-      if (media) {
+      if (media && (media.coverImage?.large || media.coverImage?.medium)) {
         return {
+          id: media.id || anilistId || null,
           anime: animeTitle || media.title?.english || media.title?.romaji,
           romaji: media.title?.romaji || animeTitle,
           english: media.title?.english || null,
@@ -296,7 +299,32 @@ export async function fetchAnimeCoverDetails(animeTitle: string, anilistId?: num
     console.warn('Client AniList fallback failed:', err);
   }
 
-  return { anime: animeTitle };
+  // Direct fast Kitsu client fallback (CORS friendly, works everywhere)
+  if (animeTitle) {
+    try {
+      const kitsuUrl = `https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(animeTitle)}&page[limit]=1`;
+      const kRes = await fetch(kitsuUrl, { headers: { Accept: 'application/vnd.api+json' } });
+      if (kRes.ok) {
+        const kJson = await kRes.json();
+        const item = kJson.data?.[0]?.attributes;
+        if (item) {
+          return {
+            id: anilistId || null,
+            anime: item.canonicalTitle || animeTitle,
+            romaji: item.titles?.ja_jp || item.canonicalTitle || animeTitle,
+            english: item.titles?.en || item.titles?.en_jp || null,
+            coverImage: item.posterImage?.small || item.posterImage?.medium || item.posterImage?.original || null,
+            year: item.startDate ? parseInt(item.startDate.slice(0, 4)) : null,
+            score: item.averageRating ? Math.round(parseFloat(item.averageRating)) : null,
+          };
+        }
+      }
+    } catch (kErr) {
+      console.warn('Client Kitsu fallback failed:', kErr);
+    }
+  }
+
+  return { anime: animeTitle, id: anilistId || null };
 }
 
 // Query song catalog (Supports both Node server API and 100% static GitHub Pages)

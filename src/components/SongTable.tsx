@@ -9,7 +9,6 @@ import {
   Calendar,
   User,
   Disc,
-  Play,
   BookmarkPlus,
   Check,
   Sparkles,
@@ -148,8 +147,19 @@ export const SongTable: React.FC<SongTableProps> = ({
               >
                 <div className="flex items-center gap-1.5">
                   <Disc className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Anime Name (Hover for Cover)</span>
+                  <span>Anime Name</span>
                   {renderSortIcon('anime_name')}
+                </div>
+              </th>
+
+              <th
+                onClick={() => onSort('theme_type')}
+                className="py-3 px-4 w-32 cursor-pointer hover:text-neutral-200 transition-colors group"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Music2 className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Theme</span>
+                  {renderSortIcon('theme_type')}
                 </div>
               </th>
 
@@ -204,25 +214,40 @@ export const SongTable: React.FC<SongTableProps> = ({
                     {typeof item.id === 'number' ? item.id : index + 1}
                   </td>
 
-                  {/* Anime Name with Hover Poster Card */}
+                  {/* Anime Name with Hover Poster Card & Direct AniList Link */}
                   <td className="py-3 px-4 font-medium text-neutral-100">
-                    <div className="flex items-center gap-2">
-                      <AnimeHoverCard
-                        animeName={item.anime_name}
-                        anilistId={(item as any).anilist_id}
+                    <AnimeHoverCard
+                      animeName={item.anime_name}
+                      anilistId={(item as any).anilist_id}
+                    >
+                      <a
+                        href={
+                          (item as any).anilist_id
+                            ? `https://anilist.co/anime/${(item as any).anilist_id}`
+                            : `https://anilist.co/search/anime?search=${encodeURIComponent(item.anime_name || '')}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-neutral-100 hover:text-emerald-300 underline decoration-dotted decoration-neutral-600 hover:decoration-emerald-400 transition-colors cursor-pointer"
+                        title="View on AniList"
                       >
-                        <span className="text-neutral-100 hover:text-emerald-300 underline decoration-dotted decoration-neutral-600 hover:decoration-emerald-400 transition-colors">
-                          {highlightText(item.anime_name, searchQuery)}
-                        </span>
-                      </AnimeHoverCard>
-
-                      {/* Theme badge (OP, ED, Insert) */}
-                      {renderThemeBadge(item.theme_type)}
-                    </div>
+                        {highlightText(item.anime_name, searchQuery)}
+                      </a>
+                    </AnimeHoverCard>
                   </td>
 
-                  {/* Year */}
-                  <td className="py-3 px-4 text-neutral-300 font-mono text-xs">
+                  {/* Theme Type (Distinct static column) */}
+                  <td className="py-3 px-4 text-xs whitespace-nowrap">
+                    {item.theme_type ? (
+                      renderThemeBadge(item.theme_type)
+                    ) : (
+                      <span className="text-neutral-600 text-xs">—</span>
+                    )}
+                  </td>
+
+                  {/* Year (Distinct static column) */}
+                  <td className="py-3 px-4 text-neutral-300 font-mono text-xs whitespace-nowrap">
                     {item.anime_year ? (
                       <span className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
                         {highlightText(item.anime_year, searchQuery)}
@@ -241,26 +266,26 @@ export const SongTable: React.FC<SongTableProps> = ({
                     )}
                   </td>
 
-                  {/* Song Name */}
+                  {/* Song Name (Click to open video, play button removed) */}
                   <td className="py-3 px-4 text-neutral-200">
                     <div className="flex items-center gap-2">
                       {item.song_name ? (
-                        <span className="text-emerald-400 font-medium">
-                          {highlightText(item.song_name, searchQuery)}
-                        </span>
+                        hasMedia && onPlayVideo ? (
+                          <button
+                            type="button"
+                            onClick={() => onPlayVideo(item as AnimeSongItem)}
+                            className="text-left text-emerald-400 hover:text-emerald-300 font-medium hover:underline cursor-pointer transition-colors"
+                            title="Play video / audio"
+                          >
+                            {highlightText(item.song_name, searchQuery)}
+                          </button>
+                        ) : (
+                          <span className="text-emerald-400 font-medium">
+                            {highlightText(item.song_name, searchQuery)}
+                          </span>
+                        )
                       ) : (
                         <span className="text-neutral-600 italic">—</span>
-                      )}
-
-                      {/* Video/Audio Play preview button */}
-                      {hasMedia && onPlayVideo && (
-                        <button
-                          onClick={() => onPlayVideo(item as AnimeSongItem)}
-                          className="p-1 rounded bg-neutral-800/80 hover:bg-emerald-600 text-neutral-300 hover:text-white transition-all cursor-pointer flex-shrink-0"
-                          title="Play song / theme video"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                        </button>
                       )}
                     </div>
                   </td>
@@ -359,7 +384,7 @@ export const SongTable: React.FC<SongTableProps> = ({
           return (
             <div key={item.id} className="p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-mono text-neutral-500 mr-2">
                     #{typeof item.id === 'number' ? item.id : index + 1}
                   </span>
@@ -367,37 +392,52 @@ export const SongTable: React.FC<SongTableProps> = ({
                     animeName={item.anime_name}
                     anilistId={(item as any).anilist_id}
                   >
-                    <span className="font-semibold text-neutral-100 text-sm hover:text-emerald-400 underline decoration-dotted">
+                    <a
+                      href={
+                        (item as any).anilist_id
+                          ? `https://anilist.co/anime/${(item as any).anilist_id}`
+                          : `https://anilist.co/search/anime?search=${encodeURIComponent(item.anime_name || '')}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-semibold text-neutral-100 text-sm hover:text-emerald-400 underline decoration-dotted cursor-pointer"
+                      title="View on AniList"
+                    >
                       {highlightText(item.anime_name, searchQuery)}
-                    </span>
+                    </a>
                   </AnimeHoverCard>
-
-                  {item.theme_type && (
-                    <span className="ml-2">
-                      {renderThemeBadge(item.theme_type)}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {renderThemeBadge(item.theme_type)}
+                  {item.anime_year && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono">
+                      {item.anime_year}
                     </span>
                   )}
                 </div>
-                {item.anime_year && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono">
-                    {item.anime_year}
-                  </span>
-                )}
               </div>
 
               <div className="text-xs text-emerald-400 font-medium flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Music2 className="w-3 h-3 flex-shrink-0" />
-                  <span>{highlightText(item.song_name || 'No song name', searchQuery)}</span>
+                  <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
+                  {item.song_name ? (
+                    hasMedia && onPlayVideo ? (
+                      <button
+                        type="button"
+                        onClick={() => onPlayVideo(item as AnimeSongItem)}
+                        className="text-left text-emerald-400 hover:text-emerald-300 font-medium hover:underline cursor-pointer transition-colors"
+                        title="Play video / audio"
+                      >
+                        {highlightText(item.song_name, searchQuery)}
+                      </button>
+                    ) : (
+                      <span>{highlightText(item.song_name, searchQuery)}</span>
+                    )
+                  ) : (
+                    <span className="text-neutral-500 italic">No song name</span>
+                  )}
                 </div>
-                {hasMedia && onPlayVideo && (
-                  <button
-                    onClick={() => onPlayVideo(item as AnimeSongItem)}
-                    className="p-1 rounded bg-neutral-800 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer"
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                  </button>
-                )}
               </div>
 
               <div className="text-xs text-neutral-400 flex items-center justify-between pt-1">

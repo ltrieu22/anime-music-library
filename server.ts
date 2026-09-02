@@ -356,6 +356,30 @@ async function startServer() {
       });
 
       if (!response.ok) {
+        // Fallback to Kitsu API if AniList is unreachable or blocked
+        try {
+          const kitsuUrl = `https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title || '')}&page[limit]=1`;
+          const kRes = await fetch(kitsuUrl, { headers: { Accept: 'application/vnd.api+json' } });
+          if (kRes.ok) {
+            const kJson = await kRes.json();
+            const item = kJson.data?.[0]?.attributes;
+            if (item) {
+              const kResult = {
+                id: anilistId || null,
+                anime: item.canonicalTitle || title,
+                romaji: item.titles?.ja_jp || item.canonicalTitle || title,
+                english: item.titles?.en || item.titles?.en_jp || null,
+                coverImage: item.posterImage?.small || item.posterImage?.medium || item.posterImage?.original || null,
+                year: item.startDate ? parseInt(item.startDate.slice(0, 4)) : null,
+                score: item.averageRating ? Math.round(parseFloat(item.averageRating)) : null,
+              };
+              coverCache.set(cacheKey, { timestamp: Date.now(), data: kResult });
+              return res.json({ data: kResult, cached: false });
+            }
+          }
+        } catch (e) {
+          console.warn('Kitsu fallback in server.ts failed:', e);
+        }
         return res.json({ data: { anime: title || `Anime #${anilistId}` } });
       }
 
@@ -363,12 +387,37 @@ async function startServer() {
       const media = json?.data?.Media;
 
       if (!media) {
+        try {
+          const kitsuUrl = `https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title || '')}&page[limit]=1`;
+          const kRes = await fetch(kitsuUrl, { headers: { Accept: 'application/vnd.api+json' } });
+          if (kRes.ok) {
+            const kJson = await kRes.json();
+            const item = kJson.data?.[0]?.attributes;
+            if (item) {
+              const kResult = {
+                id: anilistId || null,
+                anime: item.canonicalTitle || title,
+                romaji: item.titles?.ja_jp || item.canonicalTitle || title,
+                english: item.titles?.en || item.titles?.en_jp || null,
+                coverImage: item.posterImage?.small || item.posterImage?.medium || item.posterImage?.original || null,
+                year: item.startDate ? parseInt(item.startDate.slice(0, 4)) : null,
+                score: item.averageRating ? Math.round(parseFloat(item.averageRating)) : null,
+              };
+              coverCache.set(cacheKey, { timestamp: Date.now(), data: kResult });
+              return res.json({ data: kResult, cached: false });
+            }
+          }
+        } catch (e) {
+          console.warn('Kitsu fallback in server.ts failed:', e);
+        }
+
         const fallback = { anime: title || `Anime #${anilistId}` };
         coverCache.set(cacheKey, { timestamp: Date.now(), data: fallback });
         return res.json({ data: fallback });
       }
 
       const result = {
+        id: media.id || anilistId || null,
         anime: title || media.title?.english || media.title?.romaji,
         romaji: media.title?.romaji || title,
         english: media.title?.english || null,
