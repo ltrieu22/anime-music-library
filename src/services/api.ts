@@ -44,53 +44,10 @@ export function clearLocalEntries(): void {
 }
 
 export async function fetchEntries(): Promise<AnimeSongEntry[]> {
-  const local = getLocalEntries();
-
-  try {
-    const res = await fetch('/api/entries');
-    if (res.ok) {
-      const json = await res.json();
-      if (Array.isArray(json.data)) {
-        // If the user already has their own collection in localStorage, preserve it
-        if (local.length > 0) {
-          return local;
-        }
-        // If local storage is empty and server has items, use them
-        if (json.data.length > 0) {
-          saveLocalEntries(json.data);
-          return json.data;
-        }
-        return [];
-      }
-    }
-  } catch (err) {
-    console.warn('API /api/entries unreachable, using local storage fallback', err);
-  }
-  return local;
+  return getLocalEntries();
 }
 
 export async function createEntry(entry: Omit<AnimeSongEntry, 'id'>): Promise<AnimeSongEntry> {
-  // Try server first
-  try {
-    const res = await fetch('/api/entries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.entry) {
-        const current = getLocalEntries();
-        const updated = [...current, data.entry];
-        saveLocalEntries(updated);
-        return data.entry;
-      }
-    }
-  } catch (err) {
-    console.warn('Server offline, saving locally', err);
-  }
-
-  // Local fallback
   const current = getLocalEntries();
   const maxId = current.length > 0 ? Math.max(...current.map((e) => e.id)) : 0;
   const newEntry: AnimeSongEntry = {
@@ -103,28 +60,6 @@ export async function createEntry(entry: Omit<AnimeSongEntry, 'id'>): Promise<An
 }
 
 export async function updateEntry(id: number, entry: Partial<AnimeSongEntry>): Promise<AnimeSongEntry> {
-  try {
-    const res = await fetch(`/api/entries/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.entry) {
-        const current = getLocalEntries();
-        const idx = current.findIndex((e) => e.id === id);
-        if (idx !== -1) {
-          current[idx] = data.entry;
-          saveLocalEntries(current);
-        }
-        return data.entry;
-      }
-    }
-  } catch (err) {
-    console.warn('Server offline, updating locally', err);
-  }
-
   const current = getLocalEntries();
   const idx = current.findIndex((e) => e.id === id);
   if (idx !== -1) {
@@ -136,53 +71,17 @@ export async function updateEntry(id: number, entry: Partial<AnimeSongEntry>): P
 }
 
 export async function deleteEntry(id: number): Promise<void> {
-  try {
-    await fetch(`/api/entries/${id}`, { method: 'DELETE' });
-  } catch (err) {
-    console.warn('Server delete failed, continuing locally', err);
-  }
-
   const current = getLocalEntries();
   const filtered = current.filter((e) => e.id !== id);
   saveLocalEntries(filtered);
 }
 
 export async function resetEntriesToDefault(): Promise<AnimeSongEntry[]> {
-  try {
-    const res = await fetch('/api/entries/reset', { method: 'POST' });
-    if (res.ok) {
-      const refreshed = await fetch('/api/entries').then((r) => r.json());
-      if (refreshed.data) {
-        saveLocalEntries(refreshed.data);
-        return refreshed.data;
-      }
-    }
-  } catch (err) {
-    console.warn('Server reset failed, resetting local', err);
-  }
-
   saveLocalEntries([]);
   return [];
 }
 
 export async function importEntries(entries: AnimeSongEntry[]): Promise<AnimeSongEntry[]> {
-  try {
-    const res = await fetch('/api/entries/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries }),
-    });
-    if (res.ok) {
-      const refreshed = await fetch('/api/entries').then((r) => r.json());
-      if (refreshed.data) {
-        saveLocalEntries(refreshed.data);
-        return refreshed.data;
-      }
-    }
-  } catch (err) {
-    console.warn('Server import failed, importing locally', err);
-  }
-
   saveLocalEntries(entries);
   return entries;
 }
@@ -385,4 +284,3 @@ export async function fetchAniSongDbSongs(params: {
 
 // Backward compatibility alias
 export const fetchAnimeThemesSongs = fetchAniSongDbSongs;
-

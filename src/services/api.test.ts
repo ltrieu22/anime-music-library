@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deleteEntry, getLocalEntries, saveLocalEntries } from './api';
+import {
+  createEntry,
+  deleteEntry,
+  fetchEntries,
+  getLocalEntries,
+  importEntries,
+  resetEntriesToDefault,
+  saveLocalEntries,
+  updateEntry,
+} from './api';
 import { AnimeSongEntry } from '../types';
 import { getAnnSongId, mapAnisongDbSong, searchSongsByArtistIds } from './anisongdbArtists';
 
@@ -32,10 +41,11 @@ class MemoryStorage implements Storage {
   }
 }
 
-test('deleteEntry removes only the selected local collection item when the API is unavailable', async () => {
+test('collection operations use only localStorage and never call the server API', async () => {
   const originalStorage = globalThis.localStorage;
   const originalFetch = globalThis.fetch;
   const storage = new MemoryStorage();
+  let fetchCalls = 0;
 
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -43,7 +53,13 @@ test('deleteEntry removes only the selected local collection item when the API i
   });
   Object.defineProperty(globalThis, 'fetch', {
     configurable: true,
-    value: async () => new Response(null, { status: 404 }),
+    value: async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify({ data: [{ id: 999 }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
   });
 
   const entries: AnimeSongEntry[] = [
@@ -65,9 +81,30 @@ test('deleteEntry removes only the selected local collection item when the API i
 
   try {
     saveLocalEntries(entries);
-    await deleteEntry(1);
+    assert.deepEqual(await fetchEntries(), entries);
 
-    assert.deepEqual(getLocalEntries(), [entries[1]]);
+    const created = await createEntry({
+      anime_name: 'Created Locally',
+      anime_year: 2026,
+      artist: 'Local Artist',
+      song_name: 'Local Song',
+    });
+    assert.equal(created.id, 3);
+
+    const updated = await updateEntry(created.id, { song_name: 'Updated Locally' });
+    assert.equal(updated.song_name, 'Updated Locally');
+
+    await deleteEntry(1);
+    assert.deepEqual(getLocalEntries(), [entries[1], updated]);
+
+    const imported = [entries[0]];
+    assert.deepEqual(await importEntries(imported), imported);
+    assert.deepEqual(getLocalEntries(), imported);
+
+    assert.deepEqual(await resetEntriesToDefault(), []);
+    assert.deepEqual(getLocalEntries(), []);
+
+    assert.equal(fetchCalls, 0);
   } finally {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
