@@ -16,6 +16,7 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
 
   const isCollectionActive =
     currentTrack && tracks.some((t) => String(t.id) === String(currentTrack.id));
+  const isCollectionPlaying = Boolean(isCollectionActive && isPlaying);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) return;
@@ -46,14 +47,17 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
           <Music className="w-4 h-4" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
+          <h3 className="min-h-5 text-sm font-semibold text-neutral-100 flex items-center gap-2">
             <span>My Collection Playlist</span>
-            {isCollectionActive && isPlaying && (
-              <span className="flex items-center gap-1 text-[11px] font-normal text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/40">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                Playing Now
-              </span>
-            )}
+            <span
+              className={`min-w-[5.75rem] flex items-center justify-center gap-1 text-[11px] font-normal text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/40 transition-opacity ${
+                isCollectionPlaying ? 'visible opacity-100' : 'invisible opacity-0'
+              }`}
+              aria-hidden={!isCollectionPlaying}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Playing Now
+            </span>
           </h3>
           <p className="text-xs text-neutral-400">
             {tracks.length} song{tracks.length === 1 ? '' : 's'} ready for persistent audio &amp; video playback
@@ -65,10 +69,10 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
         <button
           type="button"
           onClick={handlePlayAll}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
+          className="min-w-[10.5rem] flex items-center justify-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
           title="Play entire collection"
         >
-          {isCollectionActive && isPlaying ? (
+          {isCollectionPlaying ? (
             <>
               <Pause className="w-3.5 h-3.5 fill-neutral-950" />
               <span>Pause Collection</span>

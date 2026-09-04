@@ -209,25 +209,34 @@ export const MusicPlayer: React.FC = () => {
     seek(fraction * duration);
   };
 
-  // Fullscreen toggle for the video PiP container
-  const handleToggleFullscreen = () => {
-    if (!pipContainerRef.current) return;
-    if (!document.fullscreenElement) {
-      pipContainerRef.current
-        .requestFullscreen()
-        .then(() => setIsFullscreen(true))
-        .catch((err) => console.warn('Fullscreen error:', err));
-    } else {
-      document
-        .exitFullscreen()
-        .then(() => setIsFullscreen(false))
-        .catch((err) => console.warn('Exit fullscreen error:', err));
+  // Fullscreen the video itself so the browser's playback and exit controls remain available.
+  const handleToggleFullscreen = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      if (video.requestFullscreen) {
+        await video.requestFullscreen();
+        return;
+      }
+
+      const mobileVideo = video as HTMLVideoElement & {
+        webkitEnterFullscreen?: () => void;
+      };
+      mobileVideo.webkitEnterFullscreen?.();
+    } catch (err) {
+      console.warn('Fullscreen error:', err);
     }
   };
 
   useEffect(() => {
     const handleFsChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      setIsFullscreen(document.fullscreenElement === videoRef.current);
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
@@ -607,9 +616,11 @@ export const MusicPlayer: React.FC = () => {
         <div className="relative w-full aspect-video bg-black flex items-center justify-center">
           <video
             ref={videoRef}
+            controls={isVideoVisible}
             playsInline
             crossOrigin="anonymous"
             className="w-full h-full object-contain"
+            aria-label={`${currentTrack?.animeTitle || 'Current track'} video player`}
           />
 
           {!isFullscreen && (
