@@ -12,9 +12,66 @@ import {
   Minimize2,
   X,
   Disc3,
+  GripHorizontal,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { fetchAnimeCoverDetails } from '../../services/api';
+
+const PIP_MIN_WIDTH = 280;
+const PIP_MAX_WIDTH = 720;
+const PIP_DEFAULT_WIDTH = 384;
+const PIP_VIEWPORT_MARGIN = 8;
+const PIP_VIDEO_ASPECT_RATIO = 16 / 9;
+const PIP_LAYOUT_STORAGE_KEY = 'anime-db:pip-layout-v1';
+
+interface PipLayout {
+  x: number | null;
+  y: number | null;
+  width: number;
+}
+
+interface PipPointerInteraction {
+  kind: 'drag' | 'resize';
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startLeft: number;
+  startTop: number;
+  startWidth: number;
+  startHeight: number;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function getInitialPipLayout(): PipLayout {
+  const viewportWidth = typeof window === 'undefined' ? PIP_DEFAULT_WIDTH : window.innerWidth;
+  const fallbackWidth = clamp(
+    PIP_DEFAULT_WIDTH,
+    Math.min(PIP_MIN_WIDTH, Math.max(1, viewportWidth - PIP_VIEWPORT_MARGIN * 2)),
+    Math.min(PIP_MAX_WIDTH, Math.max(1, viewportWidth - PIP_VIEWPORT_MARGIN * 2))
+  );
+
+  if (typeof window === 'undefined') {
+    return { x: null, y: null, width: fallbackWidth };
+  }
+
+  try {
+    const savedLayout = JSON.parse(window.localStorage.getItem(PIP_LAYOUT_STORAGE_KEY) || 'null');
+    if (!savedLayout || !Number.isFinite(savedLayout.width)) {
+      return { x: null, y: null, width: fallbackWidth };
+    }
+
+    return {
+      x: Number.isFinite(savedLayout.x) ? savedLayout.x : null,
+      y: Number.isFinite(savedLayout.y) ? savedLayout.y : null,
+      width: clamp(savedLayout.width, PIP_MIN_WIDTH, PIP_MAX_WIDTH),
+    };
+  } catch {
+    return { x: null, y: null, width: fallbackWidth };
+  }
+}
 
 function formatTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -45,7 +102,13 @@ export const MusicPlayer: React.FC = () => {
 
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pipLayout, setPipLayout] = useState<PipLayout>(getInitialPipLayout);
+  const [pipInteraction, setPipInteraction] = useState<'drag' | 'resize' | null>(null);
   const pipContainerRef = useRef<HTMLDivElement>(null);
+  const pointerInteractionRef = useRef<PipPointerInteraction | null>(null);
+  const pointerFrameRef = useRef<number | null>(null);
+  const pendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const cleanupPointerInteractionRef = useRef<(() => void) | null>(null);
 
   // Load cover art dynamically if not provided on the track
   useEffect(() => {
@@ -107,6 +170,223 @@ export const MusicPlayer: React.FC = () => {
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
+  // Keep the floating player reachable when the browser window is resized.
+  useEffect(() => {
+    if (!isVideoVisible || !currentTrack || isFullscreen) return;
+
+    let frameId: number | null = null;
+    const constrainToViewport = () => {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        const container = pipContainerRef.current;
+        if (!container) return;
+
+        const rect = container.getBoundingClientRect();
+        const chromeHeight = Math.max(0, rect.height - rect.width / PIP_VIDEO_ASPECT_RATIO);
+        const widthAvailable = Math.max(1, window.innerWidth - PIP_VIEWPORT_MARGIN * 2);
+        const heightAvailableAsWidth = Math.max(
+          1,
+          (window.innerHeight - PIP_VIEWPORT_MARGIN * 2 - chromeHeight) *
+            PIP_VIDEO_ASPECT_RATIO
+        );
+        const maximumWidth = Math.min(PIP_MAX_WIDTH, widthAvailable, heightAvailableAsWidth);
+        const minimumWidth = Math.min(PIP_MIN_WIDTH, maximumWidth);
+
+        setPipLayout((previous) => {
+          const width = clamp(previous.width, minimumWidth, maximumWidth);
+          const expectedHeight = chromeHeight + width / PIP_VIDEO_ASPECT_RATIO;
+          const x =
+            previous.x === null
+              ? null
+              : clamp(
+                  previous.x,
+                  PIP_VIEWPORT_MARGIN,
+                  Math.max(PIP_VIEWPORT_MARGIN, window.innerWidth - width - PIP_VIEWPORT_MARGIN)
+                );
+          const y =
+            previous.y === null
+              ? null
+              : clamp(
+                  previous.y,
+                  PIP_VIEWPORT_MARGIN,
+                  Math.max(
+                    PIP_VIEWPORT_MARGIN,
+                    window.innerHeight - expectedHeight - PIP_VIEWPORT_MARGIN
+                  )
+                );
+
+          if (width === previous.width && x === previous.x && y === previous.y) {
+            return previous;
+          }
+          return { x, y, width };
+        });
+      });
+    };
+
+    constrainToViewport();
+    window.addEventListener('resize', constrainToViewport);
+    return () => {
+      window.removeEventListener('resize', constrainToViewport);
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+    };
+  }, [currentTrack, isFullscreen, isVideoVisible]);
+
+  // Debounce persistence so pointer movement never waits on localStorage writes.
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(PIP_LAYOUT_STORAGE_KEY, JSON.stringify(pipLayout));
+      } catch {
+        // The player remains fully usable if storage is disabled.
+      }
+    }, 150);
+    return () => window.clearTimeout(timeoutId);
+  }, [pipLayout]);
+
+  useEffect(() => {
+    return () => cleanupPointerInteractionRef.current?.();
+  }, []);
+
+  const beginPipInteraction = (
+    kind: PipPointerInteraction['kind'],
+    event: React.PointerEvent<HTMLElement>
+  ) => {
+    if (event.button !== 0 || isFullscreen || !pipContainerRef.current) return;
+    if (kind === 'drag' && (event.target as HTMLElement).closest('button')) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    cleanupPointerInteractionRef.current?.();
+
+    const rect = pipContainerRef.current.getBoundingClientRect();
+    pointerInteractionRef.current = {
+      kind,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+
+    // Convert the default bottom/right placement to explicit coordinates before moving it.
+    setPipLayout({ x: rect.left, y: rect.top, width: rect.width });
+    setPipInteraction(kind);
+
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = kind === 'drag' ? 'grabbing' : 'nwse-resize';
+
+    const applyPointerPosition = (clientX: number, clientY: number) => {
+      const interaction = pointerInteractionRef.current;
+      if (!interaction) return;
+
+      const deltaX = clientX - interaction.startClientX;
+      const deltaY = clientY - interaction.startClientY;
+
+      if (interaction.kind === 'drag') {
+        const maximumX = Math.max(
+          PIP_VIEWPORT_MARGIN,
+          window.innerWidth - interaction.startWidth - PIP_VIEWPORT_MARGIN
+        );
+        const maximumY = Math.max(
+          PIP_VIEWPORT_MARGIN,
+          window.innerHeight - interaction.startHeight - PIP_VIEWPORT_MARGIN
+        );
+        setPipLayout((previous) => ({
+          ...previous,
+          x: clamp(interaction.startLeft + deltaX, PIP_VIEWPORT_MARGIN, maximumX),
+          y: clamp(interaction.startTop + deltaY, PIP_VIEWPORT_MARGIN, maximumY),
+        }));
+        return;
+      }
+
+      const chromeHeight = Math.max(
+        0,
+        interaction.startHeight - interaction.startWidth / PIP_VIDEO_ASPECT_RATIO
+      );
+      const widthAvailable = Math.max(
+        1,
+        window.innerWidth - interaction.startLeft - PIP_VIEWPORT_MARGIN
+      );
+      const heightAvailableAsWidth = Math.max(
+        1,
+        (window.innerHeight - interaction.startTop - PIP_VIEWPORT_MARGIN - chromeHeight) *
+          PIP_VIDEO_ASPECT_RATIO
+      );
+      const maximumWidth = Math.min(PIP_MAX_WIDTH, widthAvailable, heightAvailableAsWidth);
+      const minimumWidth = Math.min(PIP_MIN_WIDTH, maximumWidth);
+      const verticalWidthDelta = deltaY * PIP_VIDEO_ASPECT_RATIO;
+      const resizeDelta =
+        Math.abs(deltaX) >= Math.abs(verticalWidthDelta) ? deltaX : verticalWidthDelta;
+
+      setPipLayout((previous) => ({
+        ...previous,
+        width: clamp(interaction.startWidth + resizeDelta, minimumWidth, maximumWidth),
+      }));
+    };
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      const interaction = pointerInteractionRef.current;
+      if (!interaction || pointerEvent.pointerId !== interaction.pointerId) return;
+      pointerEvent.preventDefault();
+      pendingPointerRef.current = {
+        clientX: pointerEvent.clientX,
+        clientY: pointerEvent.clientY,
+      };
+
+      if (pointerFrameRef.current === null) {
+        pointerFrameRef.current = window.requestAnimationFrame(() => {
+          pointerFrameRef.current = null;
+          const pendingPointer = pendingPointerRef.current;
+          if (pendingPointer) {
+            applyPointerPosition(pendingPointer.clientX, pendingPointer.clientY);
+          }
+        });
+      }
+    };
+
+    const finishPointerInteraction = (pointerEvent?: PointerEvent) => {
+      const interaction = pointerInteractionRef.current;
+      if (
+        pointerEvent &&
+        interaction &&
+        pointerEvent.pointerId !== interaction.pointerId
+      ) {
+        return;
+      }
+
+      if (pointerFrameRef.current !== null) {
+        window.cancelAnimationFrame(pointerFrameRef.current);
+        pointerFrameRef.current = null;
+      }
+      if (pendingPointerRef.current) {
+        applyPointerPosition(
+          pendingPointerRef.current.clientX,
+          pendingPointerRef.current.clientY
+        );
+      }
+
+      pendingPointerRef.current = null;
+      pointerInteractionRef.current = null;
+      setPipInteraction(null);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishPointerInteraction);
+      window.removeEventListener('pointercancel', finishPointerInteraction);
+      cleanupPointerInteractionRef.current = null;
+    };
+
+    cleanupPointerInteractionRef.current = () => finishPointerInteraction();
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', finishPointerInteraction);
+    window.addEventListener('pointercancel', finishPointerInteraction);
+  };
+
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -122,15 +402,46 @@ export const MusicPlayer: React.FC = () => {
         ref={pipContainerRef}
         className={
           isVideoVisible && currentTrack
-            ? 'fixed bottom-24 right-4 z-50 w-80 sm:w-96 rounded-xl overflow-hidden shadow-2xl border border-neutral-700/90 bg-neutral-950/95 backdrop-blur-md transition-all duration-200 animate-in fade-in slide-in-from-bottom-4 flex flex-col'
+            ? `fixed z-50 rounded-xl overflow-hidden shadow-2xl border bg-neutral-950/95 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 flex flex-col ${
+                pipInteraction
+                  ? 'border-emerald-500/70 ring-2 ring-emerald-500/20'
+                  : 'border-neutral-700/90 transition-[width,box-shadow,border-color] duration-200'
+              }`
             : 'fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 pointer-events-none overflow-hidden'
+        }
+        style={
+          isVideoVisible && currentTrack && !isFullscreen
+            ? {
+                left: pipLayout.x ?? undefined,
+                top: pipLayout.y ?? undefined,
+                right: pipLayout.x === null ? PIP_VIEWPORT_MARGIN * 2 : undefined,
+                bottom: pipLayout.y === null ? 96 : undefined,
+                width: pipLayout.width,
+              }
+            : undefined
         }
         aria-hidden={!isVideoVisible}
       >
         {/* Floating PiP Header */}
         {isVideoVisible && currentTrack && (
-          <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/90 border-b border-neutral-800 text-xs text-neutral-300 select-none">
+          <div
+            onPointerDown={(event) => beginPipInteraction('drag', event)}
+            className={`flex items-center justify-between px-3 py-2 bg-neutral-900/90 border-b border-neutral-800 text-xs text-neutral-300 select-none touch-none ${
+              isFullscreen
+                ? 'cursor-default'
+                : pipInteraction === 'drag'
+                  ? 'cursor-grabbing'
+                  : 'cursor-grab'
+            }`}
+            title={isFullscreen ? undefined : 'Drag to move the video player'}
+          >
             <div className="flex items-center gap-1.5 min-w-0">
+              {!isFullscreen && (
+                <GripHorizontal
+                  className="w-3.5 h-3.5 flex-shrink-0 text-neutral-500"
+                  aria-hidden="true"
+                />
+              )}
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-semibold text-neutral-200 truncate">
                 {currentTrack.animeTitle}
@@ -170,6 +481,25 @@ export const MusicPlayer: React.FC = () => {
             crossOrigin="anonymous"
             className="w-full h-full object-contain"
           />
+
+          {!isFullscreen && (
+            <>
+              {pipInteraction === 'resize' && (
+                <div className="absolute bottom-2 right-7 z-20 rounded-md border border-neutral-700/80 bg-neutral-950/85 px-2 py-1 text-[10px] font-mono text-neutral-200 shadow-lg pointer-events-none">
+                  {Math.round(pipLayout.width)} × {Math.round(pipLayout.width / PIP_VIDEO_ASPECT_RATIO)}
+                </div>
+              )}
+              <button
+                type="button"
+                onPointerDown={(event) => beginPipInteraction('resize', event)}
+                className="group absolute bottom-0 right-0 z-20 h-7 w-7 cursor-nwse-resize touch-none rounded-tl-lg bg-gradient-to-tl from-neutral-950/90 to-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400"
+                title={`Resize video player (${PIP_MIN_WIDTH}–${PIP_MAX_WIDTH}px wide)`}
+                aria-label={`Resize video player. Minimum width ${PIP_MIN_WIDTH} pixels, maximum width ${PIP_MAX_WIDTH} pixels.`}
+              >
+                <span className="absolute bottom-1.5 right-1.5 block h-3 w-3 border-b-2 border-r-2 border-neutral-400 transition-colors group-hover:border-emerald-400" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
