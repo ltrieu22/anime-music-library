@@ -25,7 +25,7 @@ import {
   importEntries,
   resetEntriesToDefault,
 } from './services/api';
-import { searchStaticCatalog } from './services/catalogEngine';
+import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
 import {
   NOTES_STORAGE_KEY,
   clearAllNotes,
@@ -36,8 +36,11 @@ import {
   saveNotes,
   upsertNote,
 } from './services/notesStorage';
+import { PlayerProvider } from './context/PlayerContext';
+import { MusicPlayer } from './components/player/MusicPlayer';
+import { PlayCollectionBar } from './components/collection/CollectionPlayButtons';
+import { SongTrack } from './types/player';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
-import initialNewestSongs from './data/initial_songs.json';
 
 type NoteableSong = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
 
@@ -84,7 +87,7 @@ function sortSongItems<T extends NoteableSong>(
   });
 }
 
-export default function App() {
+function MainApp() {
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
   const [mode, setMode] = useState<DatabaseMode>('anisongdb');
   const isCatalogMode = mode === 'anisongdb' || mode === 'animethemes';
@@ -93,10 +96,31 @@ export default function App() {
   const [collectionEntries, setCollectionEntries] = useState<AnimeSongEntry[]>([]);
   const [isLoadingCollection, setIsLoadingCollection] = useState(true);
 
-  // AniSongDB live catalog state - pre-populated with newest 2026 tracks for instant display
-  const [anisongdbSongs, setAnisongdbSongs] = useState<AnimeSongItem[]>(initialNewestSongs as AnimeSongItem[]);
+  // AniSongDB live catalog state
+  const [anisongdbSongs, setAnisongdbSongs] = useState<AnimeSongItem[]>([]);
   const [isLoadingAniSongDb, setIsLoadingAniSongDb] = useState(false);
   const [aniSongDbTotal, setAniSongDbTotal] = useState(38821);
+
+  // Fallback catalog lookup map for collection songs missing video_url
+  const [catalogLookupMap, setCatalogLookupMap] = useState<Map<string, AnimeSongItem>>(new Map());
+
+  useEffect(() => {
+    loadStaticCatalog()
+      .then(([catalog]) => {
+        if (catalog && catalog.length > 0) {
+          const map = new Map<string, AnimeSongItem>();
+          for (const c of catalog) {
+            if (!c.video_url && !c.audio_url) continue;
+            const aKey = (c.anime_name || '').toLowerCase().trim();
+            const sKey = `${aKey}:::${(c.song_name || '').toLowerCase().trim()}`;
+            if (!map.has(sKey)) map.set(sKey, c);
+            if (!map.has(aKey)) map.set(aKey, c);
+          }
+          setCatalogLookupMap(map);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filters and Sorting
   const [searchQuery, setSearchQuery] = useState('');
@@ -320,6 +344,43 @@ export default function App() {
     });
   }, [collectionEntries, notes, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
 
+  // Map collection items to SongTrack format for persistent Spotify-style audio/video playback
+  const collectionTracks = useMemo<SongTrack[]>(() => {
+    const tracks: SongTrack[] = [];
+    for (const item of filteredAndSortedCollection) {
+      let videoUrl = item.video_url;
+      if (!videoUrl && catalogLookupMap.size > 0) {
+        const aKey = (item.anime_name || '').toLowerCase().trim();
+        const sKey = `${aKey}:::${(item.song_name || '').toLowerCase().trim()}`;
+        const match = catalogLookupMap.get(sKey) || catalogLookupMap.get(aKey);
+        if (match?.video_url) {
+          videoUrl = match.video_url;
+        }
+      }
+
+      if (videoUrl) {
+        tracks.push({
+          id: item.id,
+          animeTitle: item.anime_name,
+          songName: item.song_name || undefined,
+          artist: item.artist || undefined,
+          type: item.theme_type || undefined,
+          videoUrl: videoUrl,
+        });
+      }
+    }
+    return tracks;
+  }, [filteredAndSortedCollection, catalogLookupMap]);
+
+  const collectionTracksMap = useMemo(() => {
+    const map = new Map<string | number, SongTrack>();
+    for (const track of collectionTracks) {
+      map.set(String(track.id), track);
+      map.set(Number(track.id), track);
+    }
+    return map;
+  }, [collectionTracks]);
+
   // Handlers for Add, Edit, Delete in collection
   const handleAddSong = async (newSong: Omit<AnimeSongEntry, 'id'>) => {
     const created = await createEntry(newSong);
@@ -538,6 +599,14 @@ export default function App() {
           }
         />
 
+        {/* Play Collection Bar (in My Collection view) */}
+        {mode === 'collection' && !isLoading && (
+          <PlayCollectionBar
+            tracks={collectionTracks}
+            className="mb-4"
+          />
+        )}
+
         {/* Data Table */}
         {isLoading ? (
           <div className="bg-[#232628] border border-neutral-800 rounded-xl p-16 text-center shadow-sm flex flex-col items-center justify-center gap-3">
@@ -564,6 +633,8 @@ export default function App() {
             notes={notes}
             onEditNote={(song) => setActiveNoteSong(song)}
             isNotesMode={mode === 'notes'}
+            tracksMap={mode === 'collection' ? collectionTracksMap : undefined}
+            allTracks={mode === 'collection' ? collectionTracks : undefined}
           />
         )}
 
@@ -630,7 +701,7 @@ export default function App() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-100 shadow-xl animate-in slide-in-from-bottom-3 duration-200 text-xs">
+        <div className="fixed bottom-24 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-100 shadow-xl animate-in slide-in-from-bottom-3 duration-200 text-xs">
           {toast.type === 'success' ? (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           ) : (
@@ -639,6 +710,17 @@ export default function App() {
           <span>{toast.message}</span>
         </div>
       )}
+
+      {/* Persistent Anime Music Player */}
+      <MusicPlayer />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <PlayerProvider>
+      <MainApp />
+    </PlayerProvider>
   );
 }

@@ -1,5 +1,4 @@
 import { AnimeSongEntry, AnimeSearchResult } from '../types';
-import { INITIAL_ANIME_SONGS } from '../data/initialData';
 import { searchStaticCatalog, loadStaticCatalog } from './catalogEngine';
 
 const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
@@ -18,14 +17,14 @@ export function getLocalEntries(): AnimeSongEntry[] {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
   } catch (err) {
     console.warn('Could not read from localStorage', err);
   }
-  return INITIAL_ANIME_SONGS;
+  return [];
 }
 
 export function saveLocalEntries(entries: AnimeSongEntry[]): void {
@@ -36,20 +35,38 @@ export function saveLocalEntries(entries: AnimeSongEntry[]): void {
   }
 }
 
+export function clearLocalEntries(): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
+  } catch (err) {
+    console.warn('Could not clear localStorage', err);
+  }
+}
+
 export async function fetchEntries(): Promise<AnimeSongEntry[]> {
+  const local = getLocalEntries();
+
   try {
     const res = await fetch('/api/entries');
     if (res.ok) {
       const json = await res.json();
-      if (Array.isArray(json.data) && json.data.length > 0) {
-        saveLocalEntries(json.data);
-        return json.data;
+      if (Array.isArray(json.data)) {
+        // If the user already has their own collection in localStorage, preserve it
+        if (local.length > 0) {
+          return local;
+        }
+        // If local storage is empty and server has items, use them
+        if (json.data.length > 0) {
+          saveLocalEntries(json.data);
+          return json.data;
+        }
+        return [];
       }
     }
   } catch (err) {
     console.warn('API /api/entries unreachable, using local storage fallback', err);
   }
-  return getLocalEntries();
+  return local;
 }
 
 export async function createEntry(entry: Omit<AnimeSongEntry, 'id'>): Promise<AnimeSongEntry> {
@@ -144,8 +161,8 @@ export async function resetEntriesToDefault(): Promise<AnimeSongEntry[]> {
     console.warn('Server reset failed, resetting local', err);
   }
 
-  saveLocalEntries(INITIAL_ANIME_SONGS);
-  return INITIAL_ANIME_SONGS;
+  saveLocalEntries([]);
+  return [];
 }
 
 export async function importEntries(entries: AnimeSongEntry[]): Promise<AnimeSongEntry[]> {

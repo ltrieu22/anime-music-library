@@ -10,6 +10,8 @@ interface AnimeSongEntry {
   anime_year: number;
   artist: string;
   song_name: string;
+  theme_type?: string;
+  video_url?: string;
 }
 
 const PORT = 3000;
@@ -76,7 +78,7 @@ async function startServer() {
 
   // Add new entry
   app.post('/api/entries', (req, res) => {
-    const { anime_name, anime_year, artist, song_name, source_song_id } = req.body;
+    const { anime_name, anime_year, artist, song_name, source_song_id, theme_type, video_url } = req.body;
     if (!anime_name || !anime_name.trim()) {
       return res.status(400).json({ error: 'Anime name is required' });
     }
@@ -91,6 +93,8 @@ async function startServer() {
       anime_year: Number(anime_year) || new Date().getFullYear(),
       artist: (artist || '').trim(),
       song_name: (song_name || '').trim(),
+      ...(theme_type ? { theme_type: String(theme_type).trim() } : {}),
+      ...(video_url ? { video_url: String(video_url).trim() } : {}),
     };
 
     entries.push(newEntry);
@@ -101,7 +105,7 @@ async function startServer() {
   // Update entry
   app.put('/api/entries/:id', (req, res) => {
     const id = Number(req.params.id);
-    const { anime_name, anime_year, artist, song_name, source_song_id } = req.body;
+    const { anime_name, anime_year, artist, song_name, source_song_id, theme_type, video_url } = req.body;
     const sourceSongId = normalizeSourceSongId(source_song_id);
 
     const entries = loadEntries();
@@ -119,6 +123,8 @@ async function startServer() {
       anime_year: anime_year !== undefined ? Number(anime_year) || entries[idx].anime_year : entries[idx].anime_year,
       artist: artist !== undefined ? artist.trim() : entries[idx].artist,
       song_name: song_name !== undefined ? song_name.trim() : entries[idx].song_name,
+      ...(theme_type !== undefined ? { theme_type: String(theme_type).trim() } : {}),
+      ...(video_url !== undefined ? { video_url: String(video_url).trim() } : {}),
     };
 
     saveEntries(entries);
@@ -142,18 +148,8 @@ async function startServer() {
   // Reset entries to default
   app.post('/api/entries/reset', (req, res) => {
     try {
-      const initialPath = path.join(process.cwd(), 'src', 'data', 'initialData.ts');
-      if (fs.existsSync(initialPath)) {
-        // Load initial data
-        const content = fs.readFileSync(initialPath, 'utf-8');
-        const jsonMatch = content.match(/INITIAL_ANIME_SONGS:\s*AnimeSongEntry\[\]\s*=\s*(\[[\s\S]*?\]);/);
-        if (jsonMatch) {
-          const initial = JSON.parse(jsonMatch[1]);
-          saveEntries(initial);
-          return res.json({ success: true, count: initial.length });
-        }
-      }
-      res.status(500).json({ error: 'Could not restore initial data' });
+      saveEntries([]);
+      res.json({ success: true, count: 0 });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
