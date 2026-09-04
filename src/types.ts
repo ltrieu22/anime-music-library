@@ -22,6 +22,21 @@ export interface AnimeSongItem {
   anilist_id?: number | null;
   anime_vintage?: string | null;
   source?: 'anisongdb' | 'animethemes' | 'collection';
+  /** Structured AnisongDB credits. The numeric ID identifies the artist across aliases and groups. */
+  artists?: ArtistCredit[];
+}
+
+export interface ArtistCredit {
+  id: number;
+  names: string[];
+  line_up_id?: number;
+  groups?: ArtistCredit[] | null;
+  members?: ArtistCredit[] | null;
+}
+
+export interface ActiveArtistFilter {
+  ids: number[];
+  label: string;
 }
 
 /**

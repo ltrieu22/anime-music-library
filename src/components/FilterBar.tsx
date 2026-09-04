@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, X, RotateCcw, Calendar, SlidersHorizontal } from 'lucide-react';
+import { Search, X, RotateCcw, Calendar, UserRound } from 'lucide-react';
+import { ActiveArtistFilter } from '../types';
 import { DualRangeSlider } from './DualRangeSlider';
 
 interface FilterBarProps {
@@ -16,6 +17,8 @@ interface FilterBarProps {
   themeTypeFilter?: string;
   onThemeTypeChange?: (val: string) => void;
   placeholderText?: string;
+  activeArtistFilter?: ActiveArtistFilter | null;
+  onClearArtistFilter?: () => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -32,9 +35,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   themeTypeFilter,
   onThemeTypeChange,
   placeholderText = 'Search anime title, artist, or song name... (Press / to focus)',
+  activeArtistFilter,
+  onClearArtistFilter,
 }) => {
   const isFiltered =
     searchQuery.trim() !== '' ||
+    Boolean(activeArtistFilter) ||
     selectedMinYear > minYear ||
     selectedMaxYear < maxYear ||
     (themeTypeFilter && themeTypeFilter !== 'ALL');
@@ -123,6 +129,31 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
       </div>
 
+      {activeArtistFilter && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-700/50 bg-emerald-950/25 px-3 py-2 text-xs">
+          <UserRound className="h-3.5 w-3.5 text-emerald-400" />
+          <span className="text-neutral-400">Exact artist</span>
+          <span className="font-semibold text-emerald-300">{activeArtistFilter.label}</span>
+          <span
+            className="rounded bg-neutral-900/70 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500"
+            title={`AnisongDB artist ID${activeArtistFilter.ids.length === 1 ? '' : 's'}: ${activeArtistFilter.ids.join(', ')}`}
+          >
+            ID match
+          </span>
+          {onClearArtistFilter && (
+            <button
+              type="button"
+              onClick={onClearArtistFilter}
+              className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+              aria-label={`Clear exact artist filter for ${activeArtistFilter.label}`}
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bottom row: Single 2-Knob Year Range Slider & Decade Presets */}
       <div className="pt-2 border-t border-neutral-800/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
         {/* Sliders and Range Labels */}
@@ -175,4 +206,3 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     </div>
   );
 };
-

@@ -12,6 +12,7 @@ import {
   BookmarkPlus,
   Check,
   StickyNote,
+  Search,
 } from 'lucide-react';
 import { AnimeSongEntry, AnimeSongItem, NoteMap, SortKey, SortOrder } from '../types';
 import { SongTrack } from '../types/player';
@@ -32,6 +33,7 @@ interface SongTableProps {
   onSaveToCollection?: (song: AnimeSongItem) => void;
   savedSongKeys?: Set<string>;
   onPlayVideo?: (song: AnimeSongItem) => void;
+  onArtistSelect?: (song: AnimeSongItem) => void | Promise<void>;
   notes: NoteMap;
   onEditNote: (song: AnimeSongEntry | AnimeSongItem) => void;
   isNotesMode?: boolean;
@@ -80,6 +82,7 @@ export const SongTable: React.FC<SongTableProps> = ({
   onSaveToCollection,
   savedSongKeys = new Set(),
   onPlayVideo,
+  onArtistSelect,
   notes,
   onEditNote,
   isNotesMode = false,
@@ -320,7 +323,20 @@ export const SongTable: React.FC<SongTableProps> = ({
                   {/* Artist */}
                   <td className="py-3 px-4 text-neutral-300">
                     {item.artist ? (
-                      highlightText(item.artist, searchQuery)
+                      isCatalogMode && onArtistSelect ? (
+                        <button
+                          type="button"
+                          onClick={() => onArtistSelect(item as AnimeSongItem)}
+                          className="group/artist inline-flex items-center gap-1.5 text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
+                          title={`Find every song connected to ${item.artist} using the artist ID`}
+                          aria-label={`Search all songs by ${item.artist}`}
+                        >
+                          <Search className="h-3 w-3 flex-shrink-0 text-neutral-500 transition-colors group-hover/artist:text-emerald-400" />
+                          <span>{highlightText(item.artist, searchQuery)}</span>
+                        </button>
+                      ) : (
+                        highlightText(item.artist, searchQuery)
+                      )
                     ) : (
                       <span className="text-neutral-600 italic">Unknown</span>
                     )}
@@ -544,7 +560,19 @@ export const SongTable: React.FC<SongTableProps> = ({
               <div className="text-xs text-neutral-400 flex items-center justify-between pt-1">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5 mr-2">
                   <User className="w-3 h-3 text-neutral-500" />
-                  <span className="truncate">{highlightText(item.artist || 'Unknown Artist', searchQuery)}</span>
+                  {item.artist && isCatalogMode && onArtistSelect ? (
+                    <button
+                      type="button"
+                      onClick={() => onArtistSelect(item as AnimeSongItem)}
+                      className="truncate text-left underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300"
+                      title={`Find every song connected to ${item.artist} using the artist ID`}
+                      aria-label={`Search all songs by ${item.artist}`}
+                    >
+                      {highlightText(item.artist, searchQuery)}
+                    </button>
+                  ) : (
+                    <span className="truncate">{highlightText(item.artist || 'Unknown Artist', searchQuery)}</span>
+                  )}
                 </div>
 
                 <div className="flex flex-shrink-0 items-center gap-2">

@@ -10,6 +10,7 @@ import { NoteModal } from './components/NoteModal';
 import {
   AnimeSongEntry,
   AnimeSongItem,
+  ActiveArtistFilter,
   DatabaseMode,
   NoteMap,
   NoteSongSnapshot,
@@ -26,6 +27,7 @@ import {
   resetEntriesToDefault,
 } from './services/api';
 import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
+import { hydrateArtistCredits, searchSongsByArtistIds } from './services/anisongdbArtists';
 import {
   NOTES_STORAGE_KEY,
   clearAllNotes,
@@ -125,6 +127,7 @@ function MainApp() {
   // Filters and Sorting
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeArtistFilter, setActiveArtistFilter] = useState<ActiveArtistFilter | null>(null);
   const [themeTypeFilter, setThemeTypeFilter] = useState('ALL'); // ALL, OP, ED, IN
   const [sortKey, setSortKey] = useState<SortKey>('anime_year');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -191,12 +194,14 @@ function MainApp() {
   // Track previous filter parameters to differentiate between filter changes vs pure sorting
   const prevFiltersRef = useRef({
     search: debouncedSearch,
+    artistIds: activeArtistFilter?.ids.join(',') || '',
     minYear: selectedMinYear,
     maxYear: selectedMaxYear,
     theme: themeTypeFilter,
     mode,
   });
   const hasLoadedInitialCatalogRef = useRef(false);
+  const artistFilterKey = activeArtistFilter?.ids.join(',') || '';
 
   // Fetch AniSongDB live catalog songs whenever search, years, theme type, or sorting changes
   useEffect(() => {
@@ -207,6 +212,7 @@ function MainApp() {
     const filterChanged =
       isInitial ||
       prevFiltersRef.current.search !== debouncedSearch ||
+      prevFiltersRef.current.artistIds !== artistFilterKey ||
       prevFiltersRef.current.minYear !== selectedMinYear ||
       prevFiltersRef.current.maxYear !== selectedMaxYear ||
       prevFiltersRef.current.theme !== themeTypeFilter ||
@@ -215,6 +221,7 @@ function MainApp() {
     hasLoadedInitialCatalogRef.current = true;
     prevFiltersRef.current = {
       search: debouncedSearch,
+      artistIds: artistFilterKey,
       minYear: selectedMinYear,
       maxYear: selectedMaxYear,
       theme: themeTypeFilter,
@@ -229,24 +236,52 @@ function MainApp() {
 
     async function fetchCatalog() {
       try {
-        // Search the bundled catalog locally so a query that also appears in a
-        // private note is never transmitted to the server.
-        const res = await searchStaticCatalog({
-          q: debouncedSearch.trim() || undefined,
+        const catalogParams = {
           yearMin: selectedMinYear,
           yearMax: selectedMaxYear,
           themeType: themeTypeFilter,
-          limit: debouncedSearch.trim() ? 250 : 80,
+          limit: activeArtistFilter ? 500 : debouncedSearch.trim() ? 250 : 80,
           sortKey,
           sortOrder,
+        };
+
+        if (activeArtistFilter) {
+          const res = await searchSongsByArtistIds(activeArtistFilter.ids, catalogParams);
+          if (isMounted) {
+            setAnisongdbSongs(res.data);
+            setAniSongDbTotal(res.total);
+          }
+          return;
+        }
+
+        // Typed searches stay inside the bundled catalog. The follow-up request
+        // contains only song IDs and adds canonical artist IDs to the rows.
+        const res = await searchStaticCatalog({
+          ...catalogParams,
+          q: debouncedSearch.trim() || undefined,
         });
 
         if (isMounted && res.data) {
           setAnisongdbSongs(res.data);
           setAniSongDbTotal(res.total || res.data.length);
+          if (filterChanged) setIsLoadingAniSongDb(false);
+        }
+
+        try {
+          const hydratedSongs = await hydrateArtistCredits(res.data);
+          if (isMounted) setAnisongdbSongs(hydratedSongs);
+        } catch (artistError) {
+          // The local catalog remains usable if AnisongDB is temporarily offline;
+          // clicking an artist retries the same ID lookup on demand.
+          console.warn('Could not load canonical artist IDs', artistError);
         }
       } catch (err) {
         console.error('Failed to fetch from AniSongDB', err);
+        if (isMounted && activeArtistFilter) {
+          setAnisongdbSongs([]);
+          setAniSongDbTotal(0);
+          setToast({ message: 'Could not load this exact artist from AnisongDB', type: 'info' });
+        }
       } finally {
         if (isMounted && filterChanged) {
           setIsLoadingAniSongDb(false);
@@ -258,7 +293,7 @@ function MainApp() {
     return () => {
       isMounted = false;
     };
-  }, [mode, isCatalogMode, debouncedSearch, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
+  }, [mode, isCatalogMode, debouncedSearch, artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
 
   // Set of keys for songs already saved in collection
   const savedSongKeys = useMemo(() => {
@@ -307,6 +342,35 @@ function MainApp() {
       setSortKey(key);
       setSortOrder(key === 'anime_year' ? 'desc' : 'asc');
     }
+  };
+
+  const handleSearchChange = (value: string) => {
+    if (activeArtistFilter) setActiveArtistFilter(null);
+    setSearchQuery(value);
+  };
+
+  const handleArtistSelect = async (song: AnimeSongItem) => {
+    let resolvedSong = song;
+    if (!resolvedSong.artists?.length) {
+      try {
+        [resolvedSong] = await hydrateArtistCredits([song]);
+      } catch (error) {
+        console.error('Failed to resolve artist IDs for song', error);
+      }
+    }
+
+    const ids = Array.from(
+      new Set((resolvedSong.artists || []).map((artist) => artist.id).filter(Number.isInteger))
+    );
+    if (ids.length === 0) {
+      showToast(`No canonical artist ID is available for "${song.artist}"`, 'info');
+      return;
+    }
+
+    setSearchQuery('');
+    setDebouncedSearch('');
+    setActiveArtistFilter({ ids, label: song.artist });
+    showToast(`Filtering by the exact artist ID for "${song.artist}"`, 'info');
   };
 
   // Filter and Sort local collection entries
@@ -462,6 +526,7 @@ function MainApp() {
   const handleResetFilters = () => {
     setSearchQuery('');
     setDebouncedSearch('');
+    setActiveArtistFilter(null);
     setSelectedMinYear(1980);
     setSelectedMaxYear(2026);
     setThemeTypeFilter('ALL');
@@ -576,7 +641,7 @@ function MainApp() {
         {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
         <FilterBar
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={handleSearchChange}
           minYear={1980}
           maxYear={2026}
           selectedMinYear={selectedMinYear}
@@ -590,6 +655,8 @@ function MainApp() {
           onResetFilters={handleResetFilters}
           themeTypeFilter={isCatalogMode ? themeTypeFilter : undefined}
           onThemeTypeChange={isCatalogMode ? setThemeTypeFilter : undefined}
+          activeArtistFilter={isCatalogMode ? activeArtistFilter : null}
+          onClearArtistFilter={isCatalogMode ? () => setActiveArtistFilter(null) : undefined}
           placeholderText={
             isCatalogMode
               ? 'Search anime, artist, song title, or your notes... (Press / to focus)'
@@ -630,6 +697,7 @@ function MainApp() {
             onSaveToCollection={handleSaveFromAniSongDb}
             savedSongKeys={savedSongKeys}
             onPlayVideo={(song) => setActiveVideoSong(song)}
+            onArtistSelect={isCatalogMode ? handleArtistSelect : undefined}
             notes={notes}
             onEditNote={(song) => setActiveNoteSong(song)}
             isNotesMode={mode === 'notes'}
