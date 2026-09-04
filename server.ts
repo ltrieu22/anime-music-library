@@ -52,7 +52,7 @@ function saveEntries(entries: AnimeSongEntry[]): boolean {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     const tempFile = `${DATA_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempFile, JSON.stringify(entries, null, 2), 'utf-8');
+    fs.writeFileSync(tempFile, `${JSON.stringify(entries, null, 2)}\n`, 'utf-8');
     fs.renameSync(tempFile, DATA_FILE);
     return true;
   } catch (err) {

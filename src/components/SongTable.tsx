@@ -14,8 +14,10 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { AnimeSongEntry, AnimeSongItem, NoteMap, SortKey, SortOrder } from '../types';
+import { SongTrack } from '../types/player';
 import { findNoteForSong, getSongNoteKey } from '../services/notesStorage';
 import { AnimeHoverCard } from './AnimeHoverCard';
+import { CardPlayButton } from './collection/CollectionPlayButtons';
 
 interface SongTableProps {
   entries: (AnimeSongEntry | AnimeSongItem)[];
@@ -33,6 +35,8 @@ interface SongTableProps {
   notes: NoteMap;
   onEditNote: (song: AnimeSongEntry | AnimeSongItem) => void;
   isNotesMode?: boolean;
+  tracksMap?: Map<string | number, SongTrack>;
+  allTracks?: SongTrack[];
 }
 
 const NOTE_SNIPPET_LENGTH = 110;
@@ -79,6 +83,8 @@ export const SongTable: React.FC<SongTableProps> = ({
   notes,
   onEditNote,
   isNotesMode = false,
+  tracksMap,
+  allTracks,
 }) => {
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
 
@@ -257,6 +263,7 @@ export const SongTable: React.FC<SongTableProps> = ({
               const note = findNoteForSong(notes, item);
               const hasNote = Boolean(note?.text.trim());
               const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
+              const playerTrack = tracksMap?.get(item.id) ?? tracksMap?.get(String(item.id));
 
               return (
                 <tr
@@ -322,6 +329,9 @@ export const SongTable: React.FC<SongTableProps> = ({
                   {/* Song Name (Click to open video, play button removed) */}
                   <td className="py-3 px-4 text-neutral-200">
                     <div className="flex items-center gap-2">
+                      {playerTrack && (
+                        <CardPlayButton track={playerTrack} allTracks={allTracks} size="sm" />
+                      )}
                       {item.song_name ? (
                         hasMedia && onPlayVideo ? (
                           <button
@@ -457,6 +467,7 @@ export const SongTable: React.FC<SongTableProps> = ({
           const note = findNoteForSong(notes, item);
           const hasNote = Boolean(note?.text.trim());
           const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
+          const playerTrack = tracksMap?.get(item.id) ?? tracksMap?.get(String(item.id));
 
           return (
             <div key={rowKey} className="p-4 space-y-2.5">
@@ -497,7 +508,11 @@ export const SongTable: React.FC<SongTableProps> = ({
 
               <div className="text-xs text-emerald-400 font-medium flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
+                  {playerTrack ? (
+                    <CardPlayButton track={playerTrack} allTracks={allTracks} size="sm" />
+                  ) : (
+                    <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
+                  )}
                   {item.song_name ? (
                     hasMedia && onPlayVideo ? (
                       <button

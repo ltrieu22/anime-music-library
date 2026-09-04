@@ -19,15 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Static App
         run: npm run build

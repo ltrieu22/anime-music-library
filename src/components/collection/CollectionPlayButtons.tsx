@@ -1,0 +1,158 @@
+import React from 'react';
+import { Play, Pause, Shuffle, Music } from 'lucide-react';
+import { SongTrack } from '../../types/player';
+import { usePlayer } from '../../context/PlayerContext';
+
+interface PlayCollectionBarProps {
+  tracks: SongTrack[];
+  className?: string;
+}
+
+export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
+  tracks,
+  className = '',
+}) => {
+  const { currentTrack, isPlaying, playQueue, togglePlay } = usePlayer();
+
+  const isCollectionActive =
+    currentTrack && tracks.some((t) => String(t.id) === String(currentTrack.id));
+
+  const handlePlayAll = () => {
+    if (tracks.length === 0) return;
+    if (isCollectionActive) {
+      togglePlay();
+    } else {
+      playQueue(tracks, 0);
+    }
+  };
+
+  const handleShuffle = () => {
+    if (tracks.length === 0) return;
+    const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+    playQueue(shuffled, 0);
+  };
+
+  if (tracks.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      id="play-collection-bar"
+      className={`flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 rounded-xl bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-850 border border-neutral-800 shadow-md ${className}`}
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 flex-shrink-0">
+          <Music className="w-4 h-4" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
+            <span>My Collection Playlist</span>
+            {isCollectionActive && isPlaying && (
+              <span className="flex items-center gap-1 text-[11px] font-normal text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Playing Now
+              </span>
+            )}
+          </h3>
+          <p className="text-xs text-neutral-400">
+            {tracks.length} song{tracks.length === 1 ? '' : 's'} ready for persistent audio &amp; video playback
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handlePlayAll}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
+          title="Play entire collection"
+        >
+          {isCollectionActive && isPlaying ? (
+            <>
+              <Pause className="w-3.5 h-3.5 fill-neutral-950" />
+              <span>Pause Collection</span>
+            </>
+          ) : (
+            <>
+              <Play className="w-3.5 h-3.5 fill-neutral-950 ml-0.5" />
+              <span>Play Collection (Audio)</span>
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleShuffle}
+          className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-medium text-neutral-200 bg-neutral-800 hover:bg-neutral-700 hover:text-white border border-neutral-700 transition-all cursor-pointer"
+          title="Shuffle and play collection"
+        >
+          <Shuffle className="w-3.5 h-3.5 text-neutral-300" />
+          <span>Shuffle</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+interface CardPlayButtonProps {
+  track: SongTrack;
+  allTracks?: SongTrack[];
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+export const CardPlayButton: React.FC<CardPlayButtonProps> = ({
+  track,
+  allTracks,
+  size = 'md',
+  className = '',
+}) => {
+  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
+
+  const isThisTrackActive = currentTrack && String(currentTrack.id) === String(track.id);
+  const isThisTrackPlaying = isThisTrackActive && isPlaying;
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (isThisTrackActive) {
+      togglePlay();
+    } else {
+      playTrack(track, allTracks);
+    }
+  };
+
+  const sizeClasses = {
+    sm: 'w-7 h-7 text-xs',
+    md: 'w-8 h-8 text-xs',
+    lg: 'w-10 h-10 text-sm',
+  }[size];
+
+  const iconSizes = {
+    sm: 'w-3 h-3',
+    md: 'w-3.5 h-3.5',
+    lg: 'w-4 h-4',
+  }[size];
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      aria-label={isThisTrackPlaying ? `Pause ${track.songName || track.animeTitle}` : `Play ${track.songName || track.animeTitle}`}
+      className={`rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md ${sizeClasses} ${
+        isThisTrackPlaying
+          ? 'bg-emerald-500 text-neutral-950 ring-2 ring-emerald-400/50 scale-105'
+          : 'bg-emerald-500/90 hover:bg-emerald-400 text-neutral-950 hover:scale-105 active:scale-95'
+      } ${className}`}
+      title={isThisTrackPlaying ? 'Pause' : 'Play audio/video'}
+    >
+      {isThisTrackPlaying ? (
+        <Pause className={`${iconSizes} fill-neutral-950`} />
+      ) : (
+        <Play className={`${iconSizes} fill-neutral-950 ml-0.5`} />
+      )}
+    </button>
+  );
+};
