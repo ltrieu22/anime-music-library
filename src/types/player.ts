@@ -4,6 +4,7 @@ export interface SongTrack {
   songName?: string;
   artist?: string;
   type?: string;
+  anilistId?: number | null;
   image?: string;
   videoUrl: string; // e.g. "https://naedist.animemusicquiz.com/...webm" or "....webm"
 }

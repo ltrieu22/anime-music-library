@@ -17,8 +17,10 @@ import {
 import { AnimeSongEntry, AnimeSongItem, NoteMap, SortKey, SortOrder } from '../types';
 import { SongTrack } from '../types/player';
 import { findNoteForSong, getSongNoteKey } from '../services/notesStorage';
+import { getAniListAnimeUrl } from '../utils/anilist';
 import { AnimeHoverCard } from './AnimeHoverCard';
 import { CardPlayButton } from './collection/CollectionPlayButtons';
+import { ThemeBadge } from './ThemeBadge';
 
 interface SongTableProps {
   entries: (AnimeSongEntry | AnimeSongItem)[];
@@ -132,30 +134,9 @@ export const SongTable: React.FC<SongTableProps> = ({
     );
   };
 
-  // Render colorful theme type badges (OP, ED, Insert)
-  const renderThemeBadge = (themeType?: string) => {
-    if (!themeType) return null;
-    const upper = themeType.toUpperCase();
-    if (upper.includes('INSERT') || upper === 'IN') {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-purple-950/80 border border-purple-800/70 text-purple-300 flex-shrink-0">
-          {themeType}
-        </span>
-      );
-    }
-    if (upper.startsWith('ED') || upper.includes('ENDING')) {
-      return (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-sky-950/80 border border-sky-800/70 text-sky-300 flex-shrink-0">
-          {themeType}
-        </span>
-      );
-    }
-    return (
-      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-950/80 border border-emerald-800/70 text-emerald-300 flex-shrink-0">
-        {themeType}
-      </span>
-    );
-  };
+  const renderThemeBadge = (themeType?: string) => (
+    <ThemeBadge themeType={themeType} />
+  );
 
   if (entries.length === 0) {
     return (
@@ -284,11 +265,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                       anilistId={(item as any).anilist_id}
                     >
                       <a
-                        href={
-                          (item as any).anilist_id
-                            ? `https://anilist.co/anime/${(item as any).anilist_id}`
-                            : `https://anilist.co/search/anime?search=${encodeURIComponent(item.anime_name || '')}`
-                        }
+                        href={getAniListAnimeUrl(item.anime_name, (item as AnimeSongItem).anilist_id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -497,11 +474,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                     anilistId={(item as any).anilist_id}
                   >
                     <a
-                      href={
-                        (item as any).anilist_id
-                          ? `https://anilist.co/anime/${(item as any).anilist_id}`
-                          : `https://anilist.co/search/anime?search=${encodeURIComponent(item.anime_name || '')}`
-                      }
+                      href={getAniListAnimeUrl(item.anime_name, (item as AnimeSongItem).anilist_id)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}

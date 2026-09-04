@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { fetchAnimeCoverDetails } from '../../services/api';
+import { getAniListAnimeUrl } from '../../utils/anilist';
+import { ThemeBadge } from '../ThemeBadge';
 
 const PIP_MIN_WIDTH = 280;
 const PIP_MAX_WIDTH = 720;
@@ -187,7 +189,7 @@ export const MusicPlayer: React.FC = () => {
 
     setPosterUrl(null);
     let isMounted = true;
-    fetchAnimeCoverDetails(currentTrack.animeTitle)
+    fetchAnimeCoverDetails(currentTrack.animeTitle, currentTrack.anilistId)
       .then((details) => {
         if (isMounted && details?.coverImage) {
           setPosterUrl(details.coverImage);
@@ -328,7 +330,7 @@ export const MusicPlayer: React.FC = () => {
     event: React.PointerEvent<HTMLElement>
   ) => {
     if (event.button !== 0 || isFullscreen || !pipContainerRef.current) return;
-    if (kind === 'drag' && (event.target as HTMLElement).closest('button')) return;
+    if (kind === 'drag' && (event.target as HTMLElement).closest('button, a')) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -501,6 +503,9 @@ export const MusicPlayer: React.FC = () => {
   };
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const animeUrl = currentTrack
+    ? getAniListAnimeUrl(currentTrack.animeTitle, currentTrack.anilistId)
+    : undefined;
 
   return (
     <>
@@ -582,14 +587,33 @@ export const MusicPlayer: React.FC = () => {
           >
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-semibold text-neutral-200 truncate">
-                {currentTrack.animeTitle}
-              </span>
-              {currentTrack.type && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono">
-                  {currentTrack.type}
-                </span>
-              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <a
+                    href={animeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-neutral-100 truncate underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
+                    title="View on AniList"
+                  >
+                    {currentTrack.animeTitle}
+                  </a>
+                  {currentTrack.type && (
+                    <ThemeBadge themeType={currentTrack.type} size="compact" />
+                  )}
+                </div>
+                <p
+                  className="truncate text-xs leading-4"
+                  title={`${currentTrack.songName || 'Theme Song'}${currentTrack.artist ? ` — ${currentTrack.artist}` : ''}`}
+                >
+                  <span className="font-semibold text-neutral-100">
+                    {currentTrack.songName || 'Theme Song'}
+                  </span>
+                  {currentTrack.artist && (
+                    <span className="font-medium text-neutral-300"> — {currentTrack.artist}</span>
+                  )}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -663,25 +687,28 @@ export const MusicPlayer: React.FC = () => {
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p
+                <a
+                  href={animeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-xs sm:text-sm font-semibold text-neutral-100 truncate hover:text-emerald-400 transition-colors"
                   title={currentTrack.animeTitle}
                 >
                   {currentTrack.animeTitle}
-                </p>
+                </a>
                 {currentTrack.type && (
-                  <span className="flex-shrink-0 px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 text-[10px] font-mono font-medium">
-                    {currentTrack.type}
-                  </span>
+                  <ThemeBadge themeType={currentTrack.type} size="compact" />
                 )}
               </div>
               <p
-                className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5"
+                className="text-xs sm:text-sm truncate mt-0.5"
                 title={`${currentTrack.songName || 'Theme Song'} ${currentTrack.artist ? `— ${currentTrack.artist}` : ''}`}
               >
-                {currentTrack.songName || 'Theme Song'}
+                <span className="font-semibold text-neutral-100">
+                  {currentTrack.songName || 'Theme Song'}
+                </span>
                 {currentTrack.artist && (
-                  <span className="text-neutral-500"> — {currentTrack.artist}</span>
+                  <span className="font-medium text-neutral-300"> — {currentTrack.artist}</span>
                 )}
               </p>
             </div>

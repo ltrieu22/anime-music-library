@@ -413,12 +413,13 @@ function MainApp() {
     const tracks: SongTrack[] = [];
     for (const item of filteredAndSortedCollection) {
       let videoUrl = item.video_url;
-      if (!videoUrl && catalogLookupMap.size > 0) {
+      let catalogMatch: AnimeSongItem | undefined;
+      if (catalogLookupMap.size > 0) {
         const aKey = (item.anime_name || '').toLowerCase().trim();
         const sKey = `${aKey}:::${(item.song_name || '').toLowerCase().trim()}`;
-        const match = catalogLookupMap.get(sKey) || catalogLookupMap.get(aKey);
-        if (match?.video_url) {
-          videoUrl = match.video_url;
+        catalogMatch = catalogLookupMap.get(sKey) || catalogLookupMap.get(aKey);
+        if (!videoUrl && catalogMatch?.video_url) {
+          videoUrl = catalogMatch.video_url;
         }
       }
 
@@ -429,6 +430,7 @@ function MainApp() {
           songName: item.song_name || undefined,
           artist: item.artist || undefined,
           type: item.theme_type || undefined,
+          anilistId: catalogMatch?.anilist_id,
           videoUrl: videoUrl,
         });
       }

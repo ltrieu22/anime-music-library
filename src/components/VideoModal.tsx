@@ -1,6 +1,8 @@
 import React from 'react';
 import { X, ExternalLink, Play, Music, Video } from 'lucide-react';
 import { AnimeSongItem } from '../types';
+import { getAniListAnimeUrl } from '../utils/anilist';
+import { ThemeBadge } from './ThemeBadge';
 
 interface VideoModalProps {
   isOpen: boolean;
@@ -42,15 +44,25 @@ export const VideoModal: React.FC<VideoModalProps> = ({
               )}
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-neutral-100 truncate">
-                {song.song_name} — {song.artist}
+              <h3 className="text-base font-semibold text-neutral-100 truncate">
+                {song.song_name}
               </h3>
-              <p className="text-xs text-neutral-400 truncate">
-                {song.anime_name} ({song.anime_vintage || song.anime_year}){' '}
+              <p className="text-sm font-medium text-neutral-300 truncate">
+                {song.artist}
+              </p>
+              <p className="text-xs text-neutral-400 truncate mt-0.5">
+                <a
+                  href={getAniListAnimeUrl(song.anime_name, song.anilist_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
+                  title="View on AniList"
+                >
+                  {song.anime_name}
+                </a>{' '}
+                ({song.anime_vintage || song.anime_year}){' '}
                 {song.theme_type && (
-                  <span className="text-emerald-400 font-mono">
-                    [{song.theme_type}]
-                  </span>
+                  <ThemeBadge themeType={song.theme_type} size="inherit" />
                 )}
               </p>
             </div>
