@@ -498,7 +498,7 @@ export const MusicPlayer: React.FC = () => {
       {/*
         SINGLE <video> Element Architecture:
         The video tag is ALWAYS mounted in this container.
-        When isVideoVisible is false: hidden via off-screen positioning and pointer-events-none.
+        When isVideoVisible is false: invisibly parked at its saved position.
         When isVideoVisible is true: displayed in a floating Picture-in-Picture window.
         This provides 0ms buffering, 0 desync, and uninterrupted audio playback.
       */}
@@ -506,19 +506,21 @@ export const MusicPlayer: React.FC = () => {
         ref={pipContainerRef}
         className={
           isVideoVisible && currentTrack
-            ? `fixed z-50 rounded-xl overflow-hidden shadow-2xl border bg-neutral-950/95 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 flex flex-col ${
+            ? `fixed z-50 rounded-xl overflow-hidden shadow-2xl border bg-neutral-950/95 backdrop-blur-md animate-in fade-in flex flex-col ${
                 pipInteraction
                   ? 'border-emerald-500/70 ring-2 ring-emerald-500/20'
                   : 'border-neutral-700/90'
               }`
-            : 'fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 pointer-events-none overflow-hidden'
+            : currentTrack
+              ? 'fixed z-50 rounded-xl overflow-hidden opacity-0 invisible pointer-events-none flex flex-col'
+              : 'fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 invisible pointer-events-none overflow-hidden'
         }
         style={
-          isVideoVisible && currentTrack && !isFullscreen
+          currentTrack && !isFullscreen
             ? {
                 left: pipLayout.x ?? undefined,
                 top: pipLayout.y ?? undefined,
-                right: pipLayout.x === null ? PIP_VIEWPORT_MARGIN * 2 : undefined,
+                right: pipLayout.x === null ? PIP_VIEWPORT_MARGIN : undefined,
                 bottom:
                   pipLayout.y === null
                     ? PLAYER_BAR_FALLBACK_HEIGHT + PIP_VIEWPORT_MARGIN
