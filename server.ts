@@ -3,8 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { createCatalogQueryMatcher } from './src/services/catalogSearch';
+import type { AnimeTitleMetadata } from './src/types';
+import { copyAnimeTitleMetadata } from './src/services/animeTitles';
 
-interface AnimeSongEntry {
+interface AnimeSongEntry extends AnimeTitleMetadata {
   id: number;
   source_song_id?: string | number;
   anime_name: string;
@@ -88,6 +90,7 @@ async function startServer() {
     const maxId = entries.length > 0 ? Math.max(...entries.map((e) => e.id || 0)) : 0;
     const sourceSongId = normalizeSourceSongId(source_song_id);
     const newEntry: AnimeSongEntry = {
+      ...copyAnimeTitleMetadata(req.body),
       id: maxId + 1,
       ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
       anime_name: anime_name.trim(),
@@ -117,6 +120,7 @@ async function startServer() {
 
     entries[idx] = {
       ...entries[idx],
+      ...copyAnimeTitleMetadata(req.body),
       ...(source_song_id !== undefined && sourceSongId !== undefined
         ? { source_song_id: sourceSongId }
         : {}),
@@ -167,6 +171,7 @@ async function startServer() {
       const sourceSongId = normalizeSourceSongId(e.source_song_id);
       return {
         id: Number(e.id) || index + 1,
+        ...copyAnimeTitleMetadata(e),
         ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
         anime_name: String(e.anime_name || '').trim(),
         anime_year: Number(e.anime_year) || 2020,
@@ -462,8 +467,10 @@ async function startServer() {
     }
   });
 
-  // 100% Local Self-Contained Anime Music Catalog with Artist Group & Member Knowledge
-  const CATALOG_FILE = path.join(DATA_DIR, 'anime_catalog.json');
+  // public/data is the canonical source; a packaged server can use Vite's built copy.
+  const sourceCatalogFile = path.join(process.cwd(), 'public', 'data', 'anime_catalog.json');
+  const builtCatalogFile = path.join(process.cwd(), 'dist', 'data', 'anime_catalog.json');
+  const CATALOG_FILE = fs.existsSync(sourceCatalogFile) ? sourceCatalogFile : builtCatalogFile;
   const ALIAS_FILE = path.join(DATA_DIR, 'artist_aliases.json');
   let localCatalog: any[] = [];
   let artistAliases: Record<string, string[]> = {};

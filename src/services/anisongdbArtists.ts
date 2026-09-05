@@ -1,4 +1,5 @@
 import { AnimeSongItem, ArtistCredit } from '../types';
+import { titlesFromAnisongDb } from './animeTitles';
 
 const ANISONGDB_API = 'https://anisongdb.com/api';
 const AMQ_MEDIA_BASE = 'https://naedist.animemusicquiz.com/';
@@ -76,6 +77,7 @@ export function mapAnisongDbSong(value: unknown): AnimeSongItem | null {
 
   return {
     id: `song-${annSongId}`,
+    ...titlesFromAnisongDb(song),
     anime_name: String(song.animeENName || song.animeJPName || 'Unknown Anime'),
     anime_year: yearMatch ? Number(yearMatch[1]) : 0,
     anime_vintage: vintage,

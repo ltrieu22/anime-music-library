@@ -70,6 +70,34 @@ test('year and theme filters apply to direct and expanded matches', async () => 
   assert.deepEqual(ids(result.data), ['song-47528']);
 });
 
+test('canonical catalog is complete and unfiltered by default', async () => {
+  assert.equal(catalog.length, 38_821);
+  assert.equal(new Set(catalog.map((song) => song.id)).size, 38_821);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Opening')).length, 8_873);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Ending')).length, 15_317);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Insert')).length, 14_631);
+  assert.equal(catalog.filter((song) => Number(song.anime_year) < 1980).length, 1_173);
+
+  const result = await searchStaticCatalog({ limit: 500 });
+  assert.equal(result.total, 38_821);
+
+  const fullUiRange = await searchStaticCatalog({ yearMin: 1924, yearMax: 2026, limit: 500 });
+  assert.equal(fullUiRange.total, 38_821);
+});
+
+test('Mazinger Z is searchable without a year filter and explicit year filters still apply', async () => {
+  const unfiltered = await searchStaticCatalog({ q: 'Mazinger Z', limit: 500 });
+  assert.ok(unfiltered.data.some((song) => song.anime_name === 'Mazinger Z' && song.anime_year === 1972));
+
+  const in1972 = await searchStaticCatalog({ q: 'Mazinger Z', yearMin: 1972, yearMax: 1972, limit: 500 });
+  assert.ok(in1972.data.length > 0);
+  assert.ok(in1972.data.every((song) => song.anime_year === 1972));
+
+  const since1980 = await searchStaticCatalog({ q: 'Mazinger Z', yearMin: 1980, limit: 500 });
+  assert.ok(since1980.data.every((song) => Number(song.anime_year) >= 1980));
+  assert.ok(since1980.total < unfiltered.total);
+});
+
 test('complete multiword and punctuated artist aliases work without substring expansion', () => {
   const song = { anime_name: 'Overlord', artist: 'OxT', song_name: 'Clattanoia' };
   assert.equal(createCatalogQueryMatcher('Masayoshi   Oishi overlord', aliases)(song), true);
@@ -93,8 +121,8 @@ test('expanded artist names use boundaries, including Unicode, and stay in the a
   assert.equal(literal({ ...song, artist: 'Group Live' }), false);
 });
 
-test('the shared matcher also fixes Heike in the separate server dataset', () => {
-  const serverCatalog: AnimeSongItem[] = readData('../../data/anime_catalog.json');
+test('the shared matcher also works with the server aliases', () => {
+  const serverCatalog = catalog;
   const serverAliases = readData('../../data/artist_aliases.json');
   assert.deepEqual(ids(serverCatalog.filter(createCatalogQueryMatcher('Heike', serverAliases))), ['song-34830', 'song-34831']);
 });

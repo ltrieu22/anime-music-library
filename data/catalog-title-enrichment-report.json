@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "validatedAt": "2026-09-05T23:00:07.129Z",
+  "canonicalSource": "public/data/anime_catalog.json",
+  "metadataEndpoint": "https://anisongdb.com/api/ann_song_ids_request",
+  "originalSha256": "05850c16b7c31a9e9f3d0440f72f2589394137d15c7aaf96824c997fd4eba927",
+  "enrichedSha256": "da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a",
+  "rows": 38821,
+  "uniqueIds": 38821,
+  "opening": 8873,
+  "ending": 15317,
+  "insert": 14631,
+  "pre1980": 1173,
+  "mappingCounts": {
+    "matched": 38821,
+    "unmatched": 0,
+    "ambiguous": 0,
+    "mismatched": 0,
+    "pending": 0
+  },
+  "coverage": {
+    "english": 38821,
+    "romaji": 38821,
+    "alternateNameArrays": 38821,
+    "nonemptyAlternateNames": 2493
+  },
+  "bytes": {
+    "original": 12845066,
+    "enriched": 17403344,
+    "added": 4558278,
+    "originalGzip": 1813413,
+    "enrichedGzip": 2012125
+  },
+  "allExistingFieldsAndOrderPreserved": true,
+  "persistentIdentitiesPreserved": true,
+  "unexpectedUpstreamIds": [],
+  "samples": [
+    {
+      "id": "song-34830",
+      "anime_name": "The Heike Story",
+      "year": 2021,
+      "english": "The Heike Story",
+      "romaji": "Heike Monogatari",
+      "alternatives": []
+    },
+    {
+      "id": "song-12912",
+      "anime_name": "Attack on Titan",
+      "year": 2013,
+      "english": "Attack on Titan",
+      "romaji": "Shingeki no Kyojin",
+      "alternatives": []
+    },
+    {
+      "id": "song-23998",
+      "anime_name": "Demon Slayer: Kimetsu no Yaiba",
+      "year": 2019,
+      "english": "Demon Slayer: Kimetsu no Yaiba",
+      "romaji": "Kimetsu no Yaiba",
+      "alternatives": []
+    },
+    {
+      "id": "song-1085",
+      "anime_name": "Spirited Away",
+      "year": 2001,
+      "english": "Spirited Away",
+      "romaji": "Sen to Chihiro no Kamikakushi",
+      "alternatives": []
+    },
+    {
+      "id": "song-2883",
+      "anime_name": "Mazinger Z",
+      "year": 1972,
+      "english": "Mazinger Z",
+      "romaji": "Mazinger Z",
+      "alternatives": []
+    }
+  ],
+  "unresolved": []
+}

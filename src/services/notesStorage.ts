@@ -5,6 +5,7 @@ import type {
   NoteSongSnapshot,
   PersonalSongNote,
 } from '../types';
+import { copyAnimeTitleMetadata } from './animeTitles';
 
 export const NOTES_STORAGE_KEY = 'anime_song_notes_v1';
 export const NOTES_STORAGE_VERSION = 1;
@@ -86,6 +87,7 @@ export function createNoteSongSnapshot(song: NoteableSong): NoteSongSnapshot {
 
   return {
     id: sourceSongId ?? song.id,
+    ...copyAnimeTitleMetadata(song),
     anime_name: String(song.anime_name || ''),
     anime_year: Number(song.anime_year) || 0,
     artist: String(song.artist || ''),
@@ -141,6 +143,7 @@ function sanitizeSnapshot(value: unknown): NoteSongSnapshot | null {
   const audioUrl = value.audio_url;
 
   const snapshot: NoteSongSnapshot = {
+    ...copyAnimeTitleMetadata(value),
     id,
     anime_name: String(value.anime_name ?? ''),
     anime_year: Number.isFinite(year) ? year : 0,

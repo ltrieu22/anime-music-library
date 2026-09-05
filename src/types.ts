@@ -1,4 +1,10 @@
-export interface AnimeSongEntry {
+export interface AnimeTitleMetadata {
+  anime_name_english?: string;
+  anime_name_romaji?: string;
+  anime_alt_names?: string[];
+}
+
+export interface AnimeSongEntry extends AnimeTitleMetadata {
   id: number;
   /** Stable catalog identifier when this collection entry was copied from the catalog. */
   source_song_id?: string | number;
@@ -11,7 +17,7 @@ export interface AnimeSongEntry {
   audio_url?: string;
 }
 
-export interface AnimeSongItem {
+export interface AnimeSongItem extends AnimeTitleMetadata {
   id: string | number;
   anime_name: string;
   anime_year: number;
@@ -45,7 +51,7 @@ export interface ActiveArtistFilter {
  * the Notes view continue to render even when a song is no longer in the local
  * collection or the catalog is temporarily unavailable.
  */
-export interface NoteSongSnapshot {
+export interface NoteSongSnapshot extends AnimeTitleMetadata {
   id: string | number;
   anime_name: string;
   anime_year: number;

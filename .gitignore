@@ -2,6 +2,7 @@ node_modules/
 build/
 dist/
 coverage/
+.cache/title-enrichment/
 .DS_Store
 *.log
 .env*

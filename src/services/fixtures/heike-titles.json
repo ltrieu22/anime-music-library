@@ -1,0 +1,38 @@
+[
+  {
+    "annId": 24700,
+    "annSongId": 34830,
+    "amqSongId": 67637,
+    "animeENName": "The Heike Story",
+    "animeJPName": "Heike Monogatari",
+    "animeAltName": [],
+    "animeVintage": "Summer 2021",
+    "linked_ids": {
+      "myanimelist": 49738,
+      "anidb": 16601,
+      "anilist": 138714,
+      "kitsu": 45065
+    },
+    "songType": "Opening 1",
+    "songName": "Hikaru Toki",
+    "songArtist": "Hitsujibungaku"
+  },
+  {
+    "annId": 24700,
+    "annSongId": 34831,
+    "amqSongId": 67638,
+    "animeENName": "The Heike Story",
+    "animeJPName": "Heike Monogatari",
+    "animeAltName": [],
+    "animeVintage": "Summer 2021",
+    "linked_ids": {
+      "myanimelist": 49738,
+      "anidb": 16601,
+      "anilist": 138714,
+      "kitsu": 45065
+    },
+    "songType": "Ending 1",
+    "songName": "unified perspective",
+    "songArtist": "agraph feat.ANI (Scha Dara Parr)"
+  }
+]

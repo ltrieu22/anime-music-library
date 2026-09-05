@@ -27,6 +27,7 @@ import {
   resetEntriesToDefault,
 } from './services/api';
 import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
+import { copyAnimeTitleMetadata } from './services/animeTitles';
 import { hydrateArtistCredits, searchSongsByArtistIds } from './services/anisongdbArtists';
 import {
   NOTES_STORAGE_KEY,
@@ -53,6 +54,9 @@ const DEFAULT_SORTS: Record<DatabaseMode, { key: SortKey; order: SortOrder }> = 
   collection: { key: 'id', order: 'asc' },
   notes: { key: 'anime_year', order: 'desc' },
 };
+
+const CATALOG_MIN_YEAR = 1924;
+const CATALOG_MAX_YEAR = 2026;
 
 function matchesSearchText(values: Array<unknown>, query: string): boolean {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -141,9 +145,9 @@ function MainApp() {
   const [sortsByMode, setSortsByMode] = useState(DEFAULT_SORTS);
   const { key: sortKey, order: sortOrder } = sortsByMode[mode];
 
-  // Year Bounds: 1980 to 2026 (Supports upcoming 2026 songs!)
-  const [selectedMinYear, setSelectedMinYear] = useState<number>(1980);
-  const [selectedMaxYear, setSelectedMaxYear] = useState<number>(2026);
+  // The full-range selection is the unfiltered catalog range.
+  const [selectedMinYear, setSelectedMinYear] = useState<number>(CATALOG_MIN_YEAR);
+  const [selectedMaxYear, setSelectedMaxYear] = useState<number>(CATALOG_MAX_YEAR);
 
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -454,6 +458,7 @@ function MainApp() {
 
   const handleSaveFromAniSongDb = async (song: AnimeSongItem) => {
     const newEntry = {
+      ...copyAnimeTitleMetadata(song),
       anime_name: song.anime_name,
       anime_year: Number(song.anime_year) || 2024,
       artist: song.artist || 'Unknown Artist',
@@ -495,8 +500,8 @@ function MainApp() {
     const result = await resetEntriesToDefault();
     closePlayer();
     setCollectionEntries(result);
-    setSelectedMinYear(1980);
-    setSelectedMaxYear(2026);
+    setSelectedMinYear(CATALOG_MIN_YEAR);
+    setSelectedMaxYear(CATALOG_MAX_YEAR);
     showToast('Collection reset to empty');
   };
 
@@ -526,8 +531,8 @@ function MainApp() {
     setSearchQuery('');
     setDebouncedSearch('');
     setActiveArtistFilter(null);
-    setSelectedMinYear(1980);
-    setSelectedMaxYear(2026);
+    setSelectedMinYear(CATALOG_MIN_YEAR);
+    setSelectedMaxYear(CATALOG_MAX_YEAR);
     setThemeTypeFilter('ALL');
     setSortsByMode((prev) => ({ ...prev, [mode]: DEFAULT_SORTS[mode] }));
   };
@@ -640,8 +645,8 @@ function MainApp() {
         <FilterBar
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
-          minYear={1980}
-          maxYear={2026}
+          minYear={CATALOG_MIN_YEAR}
+          maxYear={CATALOG_MAX_YEAR}
           selectedMinYear={selectedMinYear}
           selectedMaxYear={selectedMaxYear}
           onYearRangeChange={(min, max) => {
@@ -706,7 +711,7 @@ function MainApp() {
         {/* Footer Info */}
         <footer className="mt-8 pt-4 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-2">
           <div className="flex items-center gap-2">
-            <span>Local Catalog &bull; 33,500+ tracks (1980 – 2026)</span>
+            <span>Local Catalog &bull; 38,821 tracks (1924 – 2026)</span>
           </div>
           <div>
             <span>Press </span>
