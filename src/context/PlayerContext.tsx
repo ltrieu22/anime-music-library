@@ -23,6 +23,8 @@ export interface PlayerContextType {
   currentTrack: SongTrack | null;
   queue: SongTrack[];
   queueIndex: number;
+  queueSource: 'collection' | 'single' | null;
+  canSkipNext: boolean;
   isPlaying: boolean;
   isVideoVisible: boolean;
   currentTime: number;
@@ -48,6 +50,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [currentTrack, setCurrentTrack] = useState<SongTrack | null>(null);
   const [queue, setQueue] = useState<SongTrack[]>([]);
   const [queueIndex, setQueueIndex] = useState<number>(-1);
+  const [queueSource, setQueueSource] = useState<'collection' | 'single' | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -57,23 +60,17 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Play a specific track, optionally providing a new queue
+  // A title click replaces the queue. Only collection clicks supply a playlist.
   const playTrack = useCallback((track: SongTrack, newQueue?: SongTrack[]) => {
-    if (newQueue && newQueue.length > 0) {
+    const idx = newQueue?.findIndex((t) => String(t.id) === String(track.id)) ?? -1;
+    if (newQueue && idx >= 0) {
       setQueue(newQueue);
-      const idx = newQueue.findIndex((t) => String(t.id) === String(track.id));
-      setQueueIndex(idx >= 0 ? idx : 0);
+      setQueueIndex(idx);
+      setQueueSource('collection');
     } else {
-      setQueue((prevQueue) => {
-        const existingIdx = prevQueue.findIndex((t) => String(t.id) === String(track.id));
-        if (existingIdx >= 0) {
-          setQueueIndex(existingIdx);
-          return prevQueue;
-        } else {
-          setQueueIndex(prevQueue.length);
-          return [...prevQueue, track];
-        }
-      });
+      setQueue([track]);
+      setQueueIndex(0);
+      setQueueSource('single');
     }
 
     setCurrentTrack(track);
@@ -86,23 +83,20 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const clampedIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
     setQueue(tracks);
     setQueueIndex(clampedIndex);
+    setQueueSource('collection');
     setCurrentTrack(tracks[clampedIndex]);
     setIsPlaying(true);
   }, []);
 
   // Toggle playback
   const togglePlay = useCallback(() => {
-    if (!currentTrack && queue.length > 0) {
-      playQueue(queue, 0);
-      return;
-    }
-
-    if (!videoRef.current) return;
+    if (!currentTrack || !videoRef.current) return;
 
     if (isPlaying) {
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
+      if (videoRef.current.ended) videoRef.current.currentTime = 0;
       videoRef.current
         .play()
         .then(() => setIsPlaying(true))
@@ -111,30 +105,30 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           setIsPlaying(false);
         });
     }
-  }, [currentTrack, queue, isPlaying, playQueue]);
+  }, [currentTrack, isPlaying]);
 
   // Next track
   const nextTrack = useCallback(() => {
-    if (queue.length === 0) return;
+    if (queueSource !== 'collection' || queue.length === 0) return;
     const nextIdx = (queueIndex + 1) % queue.length;
     setQueueIndex(nextIdx);
-    setCurrentTrack(queue[nextIdx]);
+    setCurrentTrack({ ...queue[nextIdx] });
     setIsPlaying(true);
-  }, [queue, queueIndex]);
+  }, [queue, queueIndex, queueSource]);
 
   // Previous track (if > 3 seconds in, restart current track; otherwise go back)
   const prevTrack = useCallback(() => {
     if (queue.length === 0) return;
-    if (currentTime > 3 && videoRef.current) {
+    if ((currentTime > 3 || queueSource === 'single') && videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
       return;
     }
     const prevIdx = queueIndex > 0 ? queueIndex - 1 : queue.length - 1;
     setQueueIndex(prevIdx);
-    setCurrentTrack(queue[prevIdx]);
+    setCurrentTrack({ ...queue[prevIdx] });
     setIsPlaying(true);
-  }, [queue, queueIndex, currentTime]);
+  }, [queue, queueIndex, queueSource, currentTime]);
 
   // Seek
   const seek = useCallback((timeInSeconds: number) => {
@@ -183,6 +177,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
     setIsPlaying(false);
     setCurrentTrack(null);
+    setQueue([]);
+    setQueueIndex(-1);
+    setQueueSource(null);
     setIsVideoVisible(false);
   }, []);
 
@@ -208,18 +205,23 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
 
     video.src = resolvedUrl;
+    setCurrentTime(0);
+    setDuration(0);
     video.volume = isMuted ? 0 : volume;
     video.muted = isMuted;
 
+    let cancelled = false;
     video
       .play()
       .then(() => {
-        setIsPlaying(true);
+        if (!cancelled) setIsPlaying(true);
       })
       .catch((err) => {
+        if (cancelled) return;
         console.warn('Auto-play blocked or failed:', err);
         setIsPlaying(false);
       });
+    return () => { cancelled = true; };
   }, [currentTrack]);
 
   // Attach native HTML5 video event listeners
@@ -244,7 +246,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
 
     const handleEnded = () => {
-      nextTrack();
+      if (queueSource === 'collection') {
+        nextTrack();
+      } else {
+        setIsPlaying(false);
+      }
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
@@ -260,7 +266,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
     };
-  }, [nextTrack, currentTrack]);
+  }, [nextTrack, currentTrack, queueSource]);
 
   return (
     <PlayerContext.Provider
@@ -268,6 +274,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         currentTrack,
         queue,
         queueIndex,
+        queueSource,
+        canSkipNext: queueSource === 'collection' && queue.length > 1,
         isPlaying,
         isVideoVisible,
         currentTime,

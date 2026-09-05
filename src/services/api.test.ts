@@ -80,6 +80,7 @@ test('collection operations use only localStorage and never call the server API'
   ];
 
   try {
+    assert.deepEqual(await fetchEntries(), [], 'a fresh browser starts with an empty collection');
     saveLocalEntries(entries);
     assert.deepEqual(await fetchEntries(), entries);
 

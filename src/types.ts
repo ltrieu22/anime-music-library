@@ -8,6 +8,7 @@ export interface AnimeSongEntry {
   song_name: string;
   theme_type?: string;
   video_url?: string;
+  audio_url?: string;
 }
 
 export interface AnimeSongItem {

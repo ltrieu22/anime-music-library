@@ -12,10 +12,10 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
   tracks,
   className = '',
 }) => {
-  const { currentTrack, isPlaying, playQueue, togglePlay } = usePlayer();
+  const { currentTrack, queueSource, isPlaying, playQueue, togglePlay } = usePlayer();
 
   const isCollectionActive =
-    currentTrack && tracks.some((t) => String(t.id) === String(currentTrack.id));
+    queueSource === 'collection' && currentTrack && tracks.some((t) => String(t.id) === String(currentTrack.id));
   const isCollectionPlaying = Boolean(isCollectionActive && isPlaying);
 
   const handlePlayAll = () => {
@@ -96,67 +96,5 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
         </button>
       </div>
     </div>
-  );
-};
-
-interface CardPlayButtonProps {
-  track: SongTrack;
-  allTracks?: SongTrack[];
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-}
-
-export const CardPlayButton: React.FC<CardPlayButtonProps> = ({
-  track,
-  allTracks,
-  size = 'md',
-  className = '',
-}) => {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
-
-  const isThisTrackActive = currentTrack && String(currentTrack.id) === String(track.id);
-  const isThisTrackPlaying = isThisTrackActive && isPlaying;
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-
-    if (isThisTrackActive) {
-      togglePlay();
-    } else {
-      playTrack(track, allTracks);
-    }
-  };
-
-  const sizeClasses = {
-    sm: 'w-7 h-7 text-xs',
-    md: 'w-8 h-8 text-xs',
-    lg: 'w-10 h-10 text-sm',
-  }[size];
-
-  const iconSizes = {
-    sm: 'w-3 h-3',
-    md: 'w-3.5 h-3.5',
-    lg: 'w-4 h-4',
-  }[size];
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      aria-label={isThisTrackPlaying ? `Pause ${track.songName || track.animeTitle}` : `Play ${track.songName || track.animeTitle}`}
-      className={`rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md ${sizeClasses} ${
-        isThisTrackPlaying
-          ? 'bg-emerald-500 text-neutral-950 ring-2 ring-emerald-400/50 scale-105'
-          : 'bg-emerald-500/90 hover:bg-emerald-400 text-neutral-950 hover:scale-105 active:scale-95'
-      } ${className}`}
-      title={isThisTrackPlaying ? 'Pause' : 'Play audio/video'}
-    >
-      {isThisTrackPlaying ? (
-        <Pause className={`${iconSizes} fill-neutral-950`} />
-      ) : (
-        <Play className={`${iconSizes} fill-neutral-950 ml-0.5`} />
-      )}
-    </button>
   );
 };

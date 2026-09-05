@@ -78,6 +78,9 @@ const sanitizeEntry = (
   const videoUrl = sanitizeOptionalUrl(value.video_url);
   if (typeof videoUrl === 'string') entry.video_url = videoUrl;
 
+  const audioUrl = sanitizeOptionalUrl(value.audio_url);
+  if (typeof audioUrl === 'string') entry.audio_url = audioUrl;
+
   const sourceSongId = sanitizeIdentifier(value.source_song_id);
   if (sourceSongId !== null) entry.source_song_id = sourceSongId;
 

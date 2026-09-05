@@ -138,6 +138,7 @@ function formatTime(seconds: number): string {
 export const MusicPlayer: React.FC = () => {
   const {
     currentTrack,
+    canSkipNext,
     isPlaying,
     isVideoVisible,
     currentTime,
@@ -745,7 +746,8 @@ export const MusicPlayer: React.FC = () => {
               <button
                 type="button"
                 onClick={nextTrack}
-                className="p-1 text-neutral-400 hover:text-neutral-100 transition-colors cursor-pointer"
+                disabled={!canSkipNext}
+                className="p-1 text-neutral-400 hover:text-neutral-100 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:text-neutral-400"
                 title="Next Track"
                 aria-label="Next Track"
               >

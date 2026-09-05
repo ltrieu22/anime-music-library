@@ -19,7 +19,8 @@ import { SongTrack } from '../types/player';
 import { findNoteForSong, getSongNoteKey } from '../services/notesStorage';
 import { getAniListAnimeUrl } from '../utils/anilist';
 import { AnimeHoverCard } from './AnimeHoverCard';
-import { CardPlayButton } from './collection/CollectionPlayButtons';
+import { usePlayer } from '../context/PlayerContext';
+import { toSongTrack } from '../utils/player';
 import { ThemeBadge } from './ThemeBadge';
 
 interface SongTableProps {
@@ -34,7 +35,6 @@ interface SongTableProps {
   isAnimeThemesMode?: boolean;
   onSaveToCollection?: (song: AnimeSongItem) => void;
   savedSongKeys?: Set<string>;
-  onPlayVideo?: (song: AnimeSongItem) => void;
   onArtistSelect?: (song: AnimeSongItem) => void | Promise<void>;
   notes: NoteMap;
   onEditNote: (song: AnimeSongEntry | AnimeSongItem) => void;
@@ -83,7 +83,6 @@ export const SongTable: React.FC<SongTableProps> = ({
   isAnimeThemesMode = false,
   onSaveToCollection,
   savedSongKeys = new Set(),
-  onPlayVideo,
   onArtistSelect,
   notes,
   onEditNote,
@@ -92,6 +91,7 @@ export const SongTable: React.FC<SongTableProps> = ({
   allTracks,
 }) => {
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
+  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
 
   // Safe highlight helper
   const highlightText = (text: string | number | undefined, query: string) => {
@@ -137,6 +137,34 @@ export const SongTable: React.FC<SongTableProps> = ({
   const renderThemeBadge = (themeType?: string) => (
     <ThemeBadge themeType={themeType} />
   );
+
+  const renderSongName = (item: AnimeSongEntry | AnimeSongItem) => {
+    const playerTrack = tracksMap
+      ? tracksMap.get(`collection:${item.id}`)
+      : toSongTrack(item, isNotesMode ? 'notes' : 'catalog');
+    const songName = item.song_name || (playerTrack ? item.anime_name : 'No song name');
+
+    if (!playerTrack) {
+      return <span className="text-emerald-400 font-medium">{highlightText(songName, searchQuery)}</span>;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (currentTrack && String(currentTrack.id) === String(playerTrack.id)) {
+            if (!isPlaying) togglePlay();
+          } else {
+            playTrack(playerTrack, allTracks);
+          }
+        }}
+        className="text-left text-emerald-400 hover:text-emerald-300 font-medium hover:underline cursor-pointer transition-colors"
+        title="Play in bottom player"
+      >
+        {highlightText(songName, searchQuery)}
+      </button>
+    );
+  };
 
   if (entries.length === 0) {
     return (
@@ -243,11 +271,9 @@ export const SongTable: React.FC<SongTableProps> = ({
             {entries.map((item, index) => {
               const songKey = `${(item.anime_name || '').toLowerCase()}:::${(item.song_name || '').toLowerCase()}`;
               const isSaved = savedSongKeys.has(songKey);
-              const hasMedia = Boolean(item.video_url || (item as any).audio_url);
               const note = findNoteForSong(notes, item);
               const hasNote = Boolean(note?.text.trim());
               const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
-              const playerTrack = tracksMap?.get(item.id) ?? tracksMap?.get(String(item.id));
 
               return (
                 <tr
@@ -319,31 +345,9 @@ export const SongTable: React.FC<SongTableProps> = ({
                     )}
                   </td>
 
-                  {/* Song Name (Click to open video, play button removed) */}
+                  {/* Song titles use the persistent player for collection tracks. */}
                   <td className="py-3 px-4 text-neutral-200">
-                    <div className="flex items-center gap-2">
-                      {playerTrack && (
-                        <CardPlayButton track={playerTrack} allTracks={allTracks} size="sm" />
-                      )}
-                      {item.song_name ? (
-                        hasMedia && onPlayVideo ? (
-                          <button
-                            type="button"
-                            onClick={() => onPlayVideo(item as AnimeSongItem)}
-                            className="text-left text-emerald-400 hover:text-emerald-300 font-medium hover:underline cursor-pointer transition-colors"
-                            title="Play video / audio"
-                          >
-                            {highlightText(item.song_name, searchQuery)}
-                          </button>
-                        ) : (
-                          <span className="text-emerald-400 font-medium">
-                            {highlightText(item.song_name, searchQuery)}
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-neutral-600 italic">—</span>
-                      )}
-                    </div>
+                    {renderSongName(item)}
                     {hasNote && note && (
                       <div className="mt-1 flex items-start gap-1.5 max-w-md text-[11px] leading-4 text-amber-200/80">
                         <StickyNote className="w-3 h-3 mt-0.5 flex-shrink-0 text-amber-300 fill-amber-300/20" />
@@ -456,11 +460,9 @@ export const SongTable: React.FC<SongTableProps> = ({
           {entries.map((item, index) => {
           const songKey = `${(item.anime_name || '').toLowerCase()}:::${(item.song_name || '').toLowerCase()}`;
           const isSaved = savedSongKeys.has(songKey);
-          const hasMedia = Boolean(item.video_url || (item as any).audio_url);
           const note = findNoteForSong(notes, item);
           const hasNote = Boolean(note?.text.trim());
           const rowKey = `${getSongNoteKey(item)}:${String(item.id)}`;
-          const playerTrack = tracksMap?.get(item.id) ?? tracksMap?.get(String(item.id));
 
           return (
             <div key={rowKey} className="p-4 space-y-2.5">
@@ -497,27 +499,8 @@ export const SongTable: React.FC<SongTableProps> = ({
 
               <div className="text-xs text-emerald-400 font-medium flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  {playerTrack ? (
-                    <CardPlayButton track={playerTrack} allTracks={allTracks} size="sm" />
-                  ) : (
-                    <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
-                  )}
-                  {item.song_name ? (
-                    hasMedia && onPlayVideo ? (
-                      <button
-                        type="button"
-                        onClick={() => onPlayVideo(item as AnimeSongItem)}
-                        className="text-left text-emerald-400 hover:text-emerald-300 font-medium hover:underline cursor-pointer transition-colors"
-                        title="Play video / audio"
-                      >
-                        {highlightText(item.song_name, searchQuery)}
-                      </button>
-                    ) : (
-                      <span>{highlightText(item.song_name, searchQuery)}</span>
-                    )
-                  ) : (
-                    <span className="text-neutral-500 italic">No song name</span>
-                  )}
+                  <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
+                  {renderSongName(item)}
                 </div>
               </div>
 

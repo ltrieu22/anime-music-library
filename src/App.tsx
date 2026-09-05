@@ -5,7 +5,6 @@ import { SongTable } from './components/SongTable';
 import { AddSongModal } from './components/AddSongModal';
 import { EditSongModal } from './components/EditSongModal';
 import { DataModal } from './components/DataModal';
-import { VideoModal } from './components/VideoModal';
 import { NoteModal } from './components/NoteModal';
 import {
   AnimeSongEntry,
@@ -38,13 +37,21 @@ import {
   saveNotes,
   upsertNote,
 } from './services/notesStorage';
-import { PlayerProvider } from './context/PlayerContext';
+import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { MusicPlayer } from './components/player/MusicPlayer';
 import { PlayCollectionBar } from './components/collection/CollectionPlayButtons';
 import { SongTrack } from './types/player';
+import { toSongTrack } from './utils/player';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 type NoteableSong = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
+
+const DEFAULT_SORTS: Record<DatabaseMode, { key: SortKey; order: SortOrder }> = {
+  anisongdb: { key: 'anime_year', order: 'desc' },
+  animethemes: { key: 'anime_year', order: 'desc' },
+  collection: { key: 'id', order: 'asc' },
+  notes: { key: 'anime_year', order: 'desc' },
+};
 
 function matchesSearchText(values: Array<unknown>, query: string): boolean {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -90,6 +97,7 @@ function sortSongItems<T extends NoteableSong>(
 }
 
 function MainApp() {
+  const { closePlayer } = usePlayer();
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
   const [mode, setMode] = useState<DatabaseMode>('anisongdb');
   const isCatalogMode = mode === 'anisongdb' || mode === 'animethemes';
@@ -129,8 +137,8 @@ function MainApp() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeArtistFilter, setActiveArtistFilter] = useState<ActiveArtistFilter | null>(null);
   const [themeTypeFilter, setThemeTypeFilter] = useState('ALL'); // ALL, OP, ED, IN
-  const [sortKey, setSortKey] = useState<SortKey>('anime_year');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortsByMode, setSortsByMode] = useState(DEFAULT_SORTS);
+  const { key: sortKey, order: sortOrder } = sortsByMode[mode];
 
   // Year Bounds: 1980 to 2026 (Supports upcoming 2026 songs!)
   const [selectedMinYear, setSelectedMinYear] = useState<number>(1980);
@@ -140,7 +148,6 @@ function MainApp() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AnimeSongEntry | null>(null);
-  const [activeVideoSong, setActiveVideoSong] = useState<AnimeSongItem | null>(null);
   const [activeNoteSong, setActiveNoteSong] = useState<NoteableSong | null>(null);
 
   // Personal notes never leave this browser.
@@ -310,7 +317,7 @@ function MainApp() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Each modal owns its own keyboard behavior. Do not let global shortcuts
       // focus the page behind a dialog or stack another dialog on top.
-      if (isAddOpen || isDataOpen || editingEntry || activeVideoSong || activeNoteSong) {
+      if (isAddOpen || isDataOpen || editingEntry || activeNoteSong) {
         return;
       }
 
@@ -332,16 +339,19 @@ function MainApp() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAddOpen, isDataOpen, editingEntry, activeVideoSong, activeNoteSong]);
+  }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong]);
 
   // Sorting handler - cleanly toggle between ascending and descending
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortOrder(key === 'anime_year' ? 'desc' : 'asc');
-    }
+    setSortsByMode((prev) => ({
+      ...prev,
+      [mode]: {
+        key,
+        order: prev[mode].key === key
+          ? (prev[mode].order === 'asc' ? 'desc' : 'asc')
+          : (key === 'anime_year' ? 'desc' : 'asc'),
+      },
+    }));
   };
 
   const handleSearchChange = (value: string) => {
@@ -412,28 +422,15 @@ function MainApp() {
   const collectionTracks = useMemo<SongTrack[]>(() => {
     const tracks: SongTrack[] = [];
     for (const item of filteredAndSortedCollection) {
-      let videoUrl = item.video_url;
       let catalogMatch: AnimeSongItem | undefined;
       if (catalogLookupMap.size > 0) {
         const aKey = (item.anime_name || '').toLowerCase().trim();
         const sKey = `${aKey}:::${(item.song_name || '').toLowerCase().trim()}`;
         catalogMatch = catalogLookupMap.get(sKey) || catalogLookupMap.get(aKey);
-        if (!videoUrl && catalogMatch?.video_url) {
-          videoUrl = catalogMatch.video_url;
-        }
       }
 
-      if (videoUrl) {
-        tracks.push({
-          id: item.id,
-          animeTitle: item.anime_name,
-          songName: item.song_name || undefined,
-          artist: item.artist || undefined,
-          type: item.theme_type || undefined,
-          anilistId: catalogMatch?.anilist_id,
-          videoUrl: videoUrl,
-        });
-      }
+      const track = toSongTrack(item, 'collection', catalogMatch);
+      if (track) tracks.push(track);
     }
     return tracks;
   }, [filteredAndSortedCollection, catalogLookupMap]);
@@ -442,7 +439,6 @@ function MainApp() {
     const map = new Map<string | number, SongTrack>();
     for (const track of collectionTracks) {
       map.set(String(track.id), track);
-      map.set(Number(track.id), track);
     }
     return map;
   }, [collectionTracks]);
@@ -462,6 +458,7 @@ function MainApp() {
       song_name: song.song_name || 'Unknown Title',
       theme_type: song.theme_type,
       video_url: song.video_url || undefined,
+      audio_url: song.audio_url || undefined,
       source_song_id: String(song.id),
     };
     const created = await createEntry(newEntry);
@@ -487,6 +484,7 @@ function MainApp() {
 
   const handleImportData = async (imported: AnimeSongEntry[], importedNotes: NoteMap) => {
     const result = await importEntries(imported);
+    closePlayer();
     setCollectionEntries(result);
     if (!saveNotes(importedNotes)) {
       throw new Error('Songs were imported, but this browser could not save the personal notes.');
@@ -497,6 +495,7 @@ function MainApp() {
 
   const handleReset = async () => {
     const result = await resetEntriesToDefault();
+    closePlayer();
     setCollectionEntries(result);
     setSelectedMinYear(1980);
     setSelectedMaxYear(2026);
@@ -532,8 +531,7 @@ function MainApp() {
     setSelectedMinYear(1980);
     setSelectedMaxYear(2026);
     setThemeTypeFilter('ALL');
-    setSortKey('anime_year');
-    setSortOrder('desc');
+    setSortsByMode((prev) => ({ ...prev, [mode]: DEFAULT_SORTS[mode] }));
   };
 
   const noteRecords = useMemo(
@@ -698,7 +696,6 @@ function MainApp() {
             isAniSongDbMode={isCatalogMode}
             onSaveToCollection={handleSaveFromAniSongDb}
             savedSongKeys={savedSongKeys}
-            onPlayVideo={(song) => setActiveVideoSong(song)}
             onArtistSelect={isCatalogMode ? handleArtistSelect : undefined}
             notes={notes}
             onEditNote={(song) => setActiveNoteSong(song)}
@@ -726,15 +723,6 @@ function MainApp() {
           </div>
         </footer>
       </main>
-
-      {/* Video / Audio Playback Modal */}
-      {activeVideoSong && (
-        <VideoModal
-          isOpen={Boolean(activeVideoSong)}
-          onClose={() => setActiveVideoSong(null)}
-          song={activeVideoSong}
-        />
-      )}
 
       <NoteModal
         isOpen={Boolean(activeNoteSong)}
