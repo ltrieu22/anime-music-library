@@ -1,4 +1,5 @@
 import { AnimeSongItem } from '../types';
+import { createCatalogQueryMatcher } from './catalogSearch';
 
 interface CatalogParams {
   q?: string;
@@ -89,34 +90,7 @@ export async function searchStaticCatalog(params: CatalogParams): Promise<{
 
   // Filter by query and related artist aliases
   if (q) {
-    const relatedArtistTerms = new Set<string>();
-    for (const [key, aliasList] of Object.entries(aliases)) {
-      if (q.includes(key.toLowerCase()) || key.toLowerCase().includes(q)) {
-        aliasList.forEach((a) => relatedArtistTerms.add(a.toLowerCase()));
-      }
-    }
-
-    const queryTerms = q.split(/\s+/).filter(Boolean);
-    filtered = filtered.filter((item) => {
-      const anime = (item.anime_name || '').toLowerCase();
-      const artist = (item.artist || '').toLowerCase();
-      const song = (item.song_name || '').toLowerCase();
-      const combined = `${anime} ${artist} ${song}`;
-
-      // All words must match
-      if (queryTerms.every((term) => combined.includes(term))) {
-        return true;
-      }
-
-      // Or match related artist aliases
-      for (const rel of relatedArtistTerms) {
-        if (artist.includes(rel)) {
-          return true;
-        }
-      }
-
-      return false;
-    });
+    filtered = filtered.filter(createCatalogQueryMatcher(q, aliases));
   }
 
   // Filter by year range

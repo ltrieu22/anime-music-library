@@ -413,7 +413,8 @@ export const SongTable: React.FC<SongTableProps> = ({
                             <button
                               onClick={() => onDelete(item.id as number)}
                               className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors cursor-pointer"
-                              title="Delete song"
+                              title="Remove from My Collection"
+                              aria-label={`Remove ${item.song_name || item.anime_name} from My Collection`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -570,7 +571,8 @@ export const SongTable: React.FC<SongTableProps> = ({
                       {onDelete && typeof item.id === 'number' && (
                         <button
                           onClick={() => onDelete(item.id as number)}
-                          className="p-1.5 rounded-md text-neutral-400 hover:text-rose-400 bg-neutral-800"
+                          aria-label={`Remove ${item.song_name || item.anime_name} from My Collection`}
+                          className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-neutral-400 hover:text-rose-400 bg-neutral-800"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

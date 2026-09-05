@@ -73,7 +73,9 @@ export async function updateEntry(id: number, entry: Partial<AnimeSongEntry>): P
 export async function deleteEntry(id: number): Promise<void> {
   const current = getLocalEntries();
   const filtered = current.filter((e) => e.id !== id);
-  saveLocalEntries(filtered);
+  // Let the removal dialog report a failed write instead of hiding a song that
+  // would reappear on reload. Leave the UI unchanged until storage succeeds.
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
 }
 
 export async function resetEntriesToDefault(): Promise<AnimeSongEntry[]> {

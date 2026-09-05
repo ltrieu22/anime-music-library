@@ -6,6 +6,7 @@ import { AddSongModal } from './components/AddSongModal';
 import { EditSongModal } from './components/EditSongModal';
 import { DataModal } from './components/DataModal';
 import { NoteModal } from './components/NoteModal';
+import { RemoveSongModal } from './components/RemoveSongModal';
 import {
   AnimeSongEntry,
   AnimeSongItem,
@@ -148,6 +149,7 @@ function MainApp() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AnimeSongEntry | null>(null);
+  const [removingEntry, setRemovingEntry] = useState<AnimeSongEntry | null>(null);
   const [activeNoteSong, setActiveNoteSong] = useState<NoteableSong | null>(null);
 
   // Personal notes never leave this browser.
@@ -317,7 +319,7 @@ function MainApp() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Each modal owns its own keyboard behavior. Do not let global shortcuts
       // focus the page behind a dialog or stack another dialog on top.
-      if (isAddOpen || isDataOpen || editingEntry || activeNoteSong) {
+      if (isAddOpen || isDataOpen || editingEntry || activeNoteSong || removingEntry) {
         return;
       }
 
@@ -339,7 +341,7 @@ function MainApp() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong]);
+  }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong, removingEntry]);
 
   // Sorting handler - cleanly toggle between ascending and descending
   const handleSort = (key: SortKey) => {
@@ -473,13 +475,9 @@ function MainApp() {
   };
 
   const handleDelete = async (id: number) => {
-    const item = collectionEntries.find((e) => e.id === id);
-    if (!window.confirm(`Are you sure you want to delete "${item?.song_name || item?.anime_name}"?`)) {
-      return;
-    }
     await deleteEntry(id);
     setCollectionEntries((prev) => prev.filter((e) => e.id !== id));
-    showToast('Entry deleted from collection', 'info');
+    showToast('Song removed from My Collection', 'info');
   };
 
   const handleImportData = async (imported: AnimeSongEntry[], importedNotes: NoteMap) => {
@@ -691,7 +689,7 @@ function MainApp() {
             sortOrder={sortOrder}
             onSort={handleSort}
             onEdit={mode === 'collection' ? (item) => setEditingEntry(item) : undefined}
-            onDelete={mode === 'collection' ? handleDelete : undefined}
+            onDelete={mode === 'collection' ? (id) => setRemovingEntry(collectionEntries.find((entry) => entry.id === id) ?? null) : undefined}
             searchQuery={debouncedSearch}
             isAniSongDbMode={isCatalogMode}
             onSaveToCollection={handleSaveFromAniSongDb}
@@ -723,6 +721,14 @@ function MainApp() {
           </div>
         </footer>
       </main>
+
+      {removingEntry && (
+        <RemoveSongModal
+          entry={removingEntry}
+          onClose={() => setRemovingEntry(null)}
+          onRemove={handleDelete}
+        />
+      )}
 
       <NoteModal
         isOpen={Boolean(activeNoteSong)}

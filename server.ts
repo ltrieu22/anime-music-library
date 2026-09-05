@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { createCatalogQueryMatcher } from './src/services/catalogSearch';
 
 interface AnimeSongEntry {
   id: number;
@@ -505,35 +506,7 @@ async function startServer() {
 
       // Filter by search query (anime, artist, or song name) + artist group/member expansion
       if (q) {
-        // Collect related artist names, units, and group members
-        const relatedArtistTerms = new Set<string>();
-        for (const [key, aliases] of Object.entries(artistAliases)) {
-          if (q.includes(key) || key.includes(q)) {
-            aliases.forEach((a) => relatedArtistTerms.add(a.toLowerCase()));
-          }
-        }
-
-        const queryTerms = q.split(/\s+/).filter(Boolean);
-        filtered = filtered.filter((item) => {
-          const anime = (item.anime_name || '').toLowerCase();
-          const artist = (item.artist || '').toLowerCase();
-          const song = (item.song_name || '').toLowerCase();
-          const combined = `${anime} ${artist} ${song}`;
-
-          // Standard match (all typed terms present)
-          if (queryTerms.every((term) => combined.includes(term))) {
-            return true;
-          }
-
-          // Artist group / member cross-match (e.g. searching Masayoshi Oishi matches OxT songs)
-          for (const rel of relatedArtistTerms) {
-            if (artist.includes(rel)) {
-              return true;
-            }
-          }
-
-          return false;
-        });
+        filtered = filtered.filter(createCatalogQueryMatcher(q, artistAliases));
       }
 
       // Filter by year range

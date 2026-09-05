@@ -124,6 +124,30 @@ test('catalog song IDs map to AnisongDB ANN song IDs', () => {
   assert.equal(getAnnSongId('not-a-song'), null);
 });
 
+test('removal preserves saved IDs, order and notes, and rejects failed storage writes', async () => {
+  const originalStorage = globalThis.localStorage;
+  const storage = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  const entries: AnimeSongEntry[] = [2, 7, 12].map((id) => ({
+    id, anime_name: 'Test Anime', anime_year: 2021, artist: 'Test Artist', song_name: `Song ${id}`,
+  }));
+  const noteBackup = JSON.stringify({ version: 1, notes: { 'collection:7': { text: 'Keep this note' } } });
+  try {
+    saveLocalEntries(entries);
+    storage.setItem('anime_song_notes_v1', noteBackup);
+    await deleteEntry(7);
+    assert.deepEqual(await fetchEntries(), [entries[0], entries[2]]);
+    assert.equal(storage.getItem('anime_song_notes_v1'), noteBackup);
+
+    storage.setItem = () => { throw new Error('Storage blocked'); };
+    await assert.rejects(deleteEntry(2), /Storage blocked/);
+    assert.deepEqual(await fetchEntries(), [entries[0], entries[2]]);
+    assert.equal(storage.getItem('anime_song_notes_v1'), noteBackup);
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
+  }
+});
+
 test('AnisongDB songs retain canonical artist IDs and group relationships', () => {
   const mapped = mapAnisongDbSong({
     annSongId: 47505,
