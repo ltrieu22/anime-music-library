@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
+import { PlaylistsProvider } from './context/PlaylistsContext';
+import { PlaylistSongPicker } from './components/collection/PlaylistSongPicker';
+import { PlaylistDetail } from './components/collection/PlaylistDetail';
+import { createSongReference, type PlaylistSongReference } from './services/playlistsStorage';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { SongTable } from './components/SongTable';
@@ -7,7 +11,6 @@ import { AddSongModal } from './components/AddSongModal';
 import { EditSongModal } from './components/EditSongModal';
 import { DataModal } from './components/DataModal';
 import { NoteModal } from './components/NoteModal';
-import { RemoveSongModal } from './components/RemoveSongModal';
 import {
   AnimeSongEntry,
   AnimeSongItem,
@@ -20,6 +23,7 @@ import {
   SortOrder,
 } from './types';
 import {
+  ensureLocalSongIdentity,
   fetchEntries,
   createEntry,
   updateEntry,
@@ -35,6 +39,7 @@ import {
   clearAllNotes,
   clearNote,
   findNoteForSong,
+  getSongMetadataFingerprint,
   getSongNoteKey,
   loadNotes,
   saveNotes,
@@ -42,6 +47,7 @@ import {
 } from './services/notesStorage';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { MusicPlayer } from './components/player/MusicPlayer';
+import { CollectionLibrary } from './components/collection/CollectionLibrary';
 import { PlayCollectionBar } from './components/collection/CollectionPlayButtons';
 import { SongTrack } from './types/player';
 import { toSongTrack } from './utils/player';
@@ -151,11 +157,12 @@ function MainApp() {
   const [selectedMinYear, setSelectedMinYear] = useState<number>(CATALOG_MIN_YEAR);
   const [selectedMaxYear, setSelectedMaxYear] = useState<number>(CATALOG_MAX_YEAR);
 
+  const [playlistSong, setPlaylistSong] = useState<PlaylistSongReference | null>(null);
+
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<AnimeSongEntry | null>(null);
-  const [removingEntry, setRemovingEntry] = useState<AnimeSongEntry | null>(null);
   const [activeNoteSong, setActiveNoteSong] = useState<NoteableSong | null>(null);
 
   // Personal notes never leave this browser.
@@ -310,22 +317,28 @@ function MainApp() {
     };
   }, [mode, isCatalogMode, debouncedSearch, artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
 
-  // Set of keys for songs already saved in collection
-  const savedSongKeys = useMemo(() => {
-    const set = new Set<string>();
-    for (const item of collectionEntries) {
-      const key = `${(item.anime_name || '').toLowerCase()}:::${(item.song_name || '').toLowerCase()}`;
-      set.add(key);
-    }
-    return set;
+  // Resolve Saved Songs using stable catalog identity first, with the existing
+  // metadata fingerprint as a compatibility fallback for older saved entries.
+  const findSavedEntry = useCallback((song: NoteableSong) => {
+    const songKey = getSongNoteKey(song);
+    const exactMatch = collectionEntries.find((entry) => getSongNoteKey(entry) === songKey);
+    if (exactMatch) return exactMatch;
+
+    const fingerprint = getSongMetadataFingerprint(song);
+    return collectionEntries.find((entry) => getSongMetadataFingerprint(entry) === fingerprint);
   }, [collectionEntries]);
+
+  const isSongSaved = useCallback(
+    (song: NoteableSong) => Boolean(findSavedEntry(song)),
+    [findSavedEntry],
+  );
 
   // Keyboard shortcut listener (/ for search, N for new song)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Each modal owns its own keyboard behavior. Do not let global shortcuts
       // focus the page behind a dialog or stack another dialog on top.
-      if (isAddOpen || isDataOpen || editingEntry || activeNoteSong || removingEntry) {
+      if (document.querySelector('dialog[open]') || isAddOpen || isDataOpen || editingEntry || activeNoteSong) {
         return;
       }
 
@@ -347,7 +360,7 @@ function MainApp() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong, removingEntry]);
+  }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong]);
 
   // Sorting handler - cleanly toggle between ascending and descending
   const handleSort = (key: SortKey) => {
@@ -451,14 +464,38 @@ function MainApp() {
     return map;
   }, [collectionTracks]);
 
+  const handleAddToPlaylist = (song: NoteableSong) => {
+    try {
+      let identified = song;
+      const isLocalCollectionEntry = mode === 'collection'
+        && typeof song.id === 'number'
+        && !('source' in song)
+        && !('source_song_id' in song && song.source_song_id !== undefined);
+      if (isLocalCollectionEntry) {
+        identified = ensureLocalSongIdentity(song as AnimeSongEntry);
+        setCollectionEntries((entries) => entries.map((entry) => entry.id === identified.id ? identified as AnimeSongEntry : entry));
+      }
+      setPlaylistSong(createSongReference(identified));
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Could not prepare this song for a playlist.', 'info');
+    }
+  };
+
   // Handlers for Add, Edit, Delete in collection
   const handleAddSong = async (newSong: Omit<AnimeSongEntry, 'id'>) => {
     const created = await createEntry(newSong);
     setCollectionEntries((prev) => [...prev, created]);
-    showToast(`Added "${created.song_name || created.anime_name}" to your collection`);
+    showToast(`Added "${created.song_name || created.anime_name}" to Saved Songs`);
   };
 
-  const handleSaveFromAniSongDb = async (song: AnimeSongItem) => {
+  const handleSaveSong = async (song: NoteableSong) => {
+    const explicitSource = 'source' in song ? song.source : undefined;
+    const sourceSongId = 'source_song_id' in song && song.source_song_id !== undefined
+      ? song.source_song_id
+      : explicitSource === 'anisongdb' || explicitSource === 'animethemes' || isCatalogMode
+        ? song.id
+        : undefined;
+
     const newEntry = {
       ...copyAnimeTitleMetadata(song),
       anime_name: song.anime_name,
@@ -468,11 +505,11 @@ function MainApp() {
       theme_type: song.theme_type,
       video_url: song.video_url || undefined,
       audio_url: song.audio_url || undefined,
-      source_song_id: String(song.id),
+      ...(sourceSongId !== undefined ? { source_song_id: String(sourceSongId) } : {}),
     };
     const created = await createEntry(newEntry);
     setCollectionEntries((prev) => [...prev, created]);
-    showToast(`Saved "${song.song_name}" to your collection!`);
+    showToast(`Saved "${song.song_name || song.anime_name}" to Saved Songs!`);
   };
 
   const handleEditSave = async (id: number, updatedFields: Partial<AnimeSongEntry>) => {
@@ -484,7 +521,21 @@ function MainApp() {
   const handleDelete = async (id: number) => {
     await deleteEntry(id);
     setCollectionEntries((prev) => prev.filter((e) => e.id !== id));
-    showToast('Song removed from My Collection', 'info');
+    showToast('Song removed from Saved Songs', 'info');
+  };
+
+  const handleToggleSaved = async (song: NoteableSong) => {
+    const savedEntry = findSavedEntry(song);
+    try {
+      if (savedEntry) {
+        await handleDelete(savedEntry.id);
+      } else {
+        await handleSaveSong(song);
+      }
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Could not update Saved Songs.', 'info');
+      throw cause;
+    }
   };
 
   const handleImportData = async (imported: AnimeSongEntry[], importedNotes: NoteMap) => {
@@ -620,6 +671,78 @@ function MainApp() {
       ? isLoadingCollection
       : false;
 
+  const songView = (
+    <>
+      {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
+      <FilterBar
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
+        minYear={CATALOG_MIN_YEAR}
+        maxYear={CATALOG_MAX_YEAR}
+        selectedMinYear={selectedMinYear}
+        selectedMaxYear={selectedMaxYear}
+        onYearRangeChange={(min, max) => {
+          setSelectedMinYear(min);
+          setSelectedMaxYear(max);
+        }}
+        totalFiltered={totalFilteredCount}
+        totalItems={totalItemsCount}
+        onResetFilters={handleResetFilters}
+        themeTypeFilter={isCatalogMode ? themeTypeFilter : undefined}
+        onThemeTypeChange={isCatalogMode ? setThemeTypeFilter : undefined}
+        activeArtistFilter={isCatalogMode ? activeArtistFilter : null}
+        onClearArtistFilter={isCatalogMode ? () => setActiveArtistFilter(null) : undefined}
+        placeholderText={
+          isCatalogMode
+            ? 'Search anime, artist, song title, or your notes... (Press / to focus)'
+            : mode === 'collection'
+              ? 'Search Saved Songs and personal notes... (Press / to focus)'
+              : 'Search your notes, anime, songs, or artists... (Press / to focus)'
+        }
+      />
+
+      {/* Play Collection Bar (in My Collection view) */}
+      {mode === 'collection' && !isLoading && (
+        <PlayCollectionBar
+          tracks={collectionTracks}
+          className="mb-4"
+        />
+      )}
+
+      {/* Data Table */}
+      {isLoading ? (
+        <div className="bg-[#232628] border border-neutral-800 rounded-xl p-16 text-center shadow-sm flex flex-col items-center justify-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+          <span className="text-xs text-neutral-400">
+            {isCatalogMode
+              ? 'Searching catalog...'
+              : 'Loading saved collection...'}
+          </span>
+        </div>
+      ) : (
+        <SongTable
+          entries={currentDisplayList}
+          sortKey={sortKey}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+          onEdit={mode === 'collection' ? (item) => setEditingEntry(item) : undefined}
+          searchQuery={debouncedSearch}
+          isAniSongDbMode={isCatalogMode}
+          isSongSaved={isSongSaved}
+          onToggleSaved={handleToggleSaved}
+          onAddToPlaylist={handleAddToPlaylist}
+          onArtistSelect={isCatalogMode ? handleArtistSelect : undefined}
+          notes={notes}
+          onEditNote={(song) => setActiveNoteSong(song)}
+          isNotesMode={mode === 'notes'}
+          tracksMap={mode === 'collection' ? collectionTracksMap : undefined}
+          allTracks={mode === 'collection' ? collectionTracks : undefined}
+        />
+      )}
+
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[#181a1b] text-neutral-200 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-300">
       {/* Top Navigation Bar with AniSongDB / Collection Mode Switcher */}
@@ -643,72 +766,24 @@ function MainApp() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
-        <FilterBar
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          minYear={CATALOG_MIN_YEAR}
-          maxYear={CATALOG_MAX_YEAR}
-          selectedMinYear={selectedMinYear}
-          selectedMaxYear={selectedMaxYear}
-          onYearRangeChange={(min, max) => {
-            setSelectedMinYear(min);
-            setSelectedMaxYear(max);
-          }}
-          totalFiltered={totalFilteredCount}
-          totalItems={totalItemsCount}
-          onResetFilters={handleResetFilters}
-          themeTypeFilter={isCatalogMode ? themeTypeFilter : undefined}
-          onThemeTypeChange={isCatalogMode ? setThemeTypeFilter : undefined}
-          activeArtistFilter={isCatalogMode ? activeArtistFilter : null}
-          onClearArtistFilter={isCatalogMode ? () => setActiveArtistFilter(null) : undefined}
-          placeholderText={
-            isCatalogMode
-              ? 'Search anime, artist, song title, or your notes... (Press / to focus)'
-              : mode === 'collection'
-                ? 'Search your collection and personal notes... (Press / to focus)'
-                : 'Search your notes, anime, songs, or artists... (Press / to focus)'
-          }
-        />
-
-        {/* Play Collection Bar (in My Collection view) */}
-        {mode === 'collection' && !isLoading && (
-          <PlayCollectionBar
-            tracks={collectionTracks}
-            className="mb-4"
-          />
-        )}
-
-        {/* Data Table */}
-        {isLoading ? (
-          <div className="bg-[#232628] border border-neutral-800 rounded-xl p-16 text-center shadow-sm flex flex-col items-center justify-center gap-3">
-            <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-            <span className="text-xs text-neutral-400">
-              {isCatalogMode
-                ? 'Searching catalog...'
-                : 'Loading saved collection...'}
-            </span>
-          </div>
-        ) : (
-          <SongTable
-            entries={currentDisplayList}
-            sortKey={sortKey}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-            onEdit={mode === 'collection' ? (item) => setEditingEntry(item) : undefined}
-            onDelete={mode === 'collection' ? (id) => setRemovingEntry(collectionEntries.find((entry) => entry.id === id) ?? null) : undefined}
-            searchQuery={debouncedSearch}
-            isAniSongDbMode={isCatalogMode}
-            onSaveToCollection={handleSaveFromAniSongDb}
-            savedSongKeys={savedSongKeys}
-            onArtistSelect={isCatalogMode ? handleArtistSelect : undefined}
-            notes={notes}
-            onEditNote={(song) => setActiveNoteSong(song)}
-            isNotesMode={mode === 'notes'}
-            tracksMap={mode === 'collection' ? collectionTracksMap : undefined}
-            allTracks={mode === 'collection' ? collectionTracks : undefined}
-          />
-        )}
+        {mode === 'collection' ? (
+          <CollectionLibrary
+            savedCount={collectionEntries.length}
+            renderPlaylist={(playlist) => (
+              <PlaylistDetail
+                key={playlist.id}
+                playlist={playlist}
+                notes={notes}
+                onEditNote={setActiveNoteSong}
+                onAddToPlaylist={handleAddToPlaylist}
+                isSongSaved={isSongSaved}
+                onToggleSaved={handleToggleSaved}
+              />
+            )}
+          >
+            {songView}
+          </CollectionLibrary>
+        ) : songView}
 
         {/* Footer Info */}
         <footer className="mt-8 pt-4 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-2">
@@ -729,13 +804,7 @@ function MainApp() {
         </footer>
       </main>
 
-      {removingEntry && (
-        <RemoveSongModal
-          entry={removingEntry}
-          onClose={() => setRemovingEntry(null)}
-          onRemove={handleDelete}
-        />
-      )}
+      {playlistSong && <PlaylistSongPicker song={playlistSong} onClose={() => setPlaylistSong(null)} />}
 
       <NoteModal
         isOpen={Boolean(activeNoteSong)}
@@ -792,7 +861,7 @@ export default function App() {
   return (
     <TitleLanguageProvider>
       <PlayerProvider>
-        <MainApp />
+        <PlaylistsProvider><MainApp /></PlaylistsProvider>
       </PlayerProvider>
     </TitleLanguageProvider>
   );

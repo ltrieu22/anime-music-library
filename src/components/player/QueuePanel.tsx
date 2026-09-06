@@ -89,7 +89,7 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
           >Clear upcoming</button>
         </div>
         <p className="mb-3 text-xs leading-5 text-neutral-400">
-          {queueSource === 'collection' ? 'Collection repeats. Editing the queue turns repeat off.' : 'Playback stops at the end of this queue.'}
+          {queueSource === 'collection' ? 'This playlist repeats. Editing the queue turns repeat off.' : 'Playback stops at the end of this queue.'}
         </p>
         {!upcomingQueueItems.length ? (
           <p className="rounded-xl border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">Nothing up next. Use Add to queue on a song to add it here.</p>

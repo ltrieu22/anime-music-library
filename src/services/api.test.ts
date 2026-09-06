@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  ensureLocalSongIdentity,
   createEntry,
   deleteEntry,
   fetchEntries,
@@ -212,5 +213,30 @@ test('artist clicks query by unique numeric IDs instead of artist text', async (
       configurable: true,
       value: originalFetch,
     });
+  }
+});
+
+
+test('legacy manual song identity persists without renumbering; recycled saved IDs receive new identity', async () => {
+  const originalStorage = globalThis.localStorage;
+  const storage = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  try {
+    const song = { id: 17, anime_name: 'Manual anime', anime_year: 2020, artist: 'Artist', song_name: 'Manual song' };
+    storage.setItem('anime_songs_db_v1', JSON.stringify([song]));
+    const identified = ensureLocalSongIdentity(song);
+    assert.equal(identified.id, 17);
+    assert.ok(identified.local_song_id);
+    assert.equal(ensureLocalSongIdentity(song).local_song_id, identified.local_song_id);
+    assert.equal(getLocalEntries()[0].local_song_id, identified.local_song_id);
+    await deleteEntry(17);
+    storage.setItem('anime_songs_db_v1', JSON.stringify([song]));
+    assert.notEqual(ensureLocalSongIdentity(song).local_song_id, identified.local_song_id);
+    storage.setItem('anime_songs_db_v1', JSON.stringify([song]));
+    storage.setItem = () => { throw new Error('Storage full'); };
+    assert.throws(() => ensureLocalSongIdentity(song), /Storage full/);
+    assert.equal(getLocalEntries()[0].local_song_id, undefined);
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
   }
 });

@@ -48,7 +48,7 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
         </div>
         <div>
           <h3 className="min-h-5 text-sm font-semibold text-neutral-100 flex items-center gap-2">
-            <span>My Collection Playlist</span>
+            <span>Saved Songs</span>
             <span
               className={`min-w-[5.75rem] flex items-center justify-center gap-1 text-[11px] font-normal text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/40 transition-opacity ${
                 isCollectionPlaying ? 'visible opacity-100' : 'invisible opacity-0'
@@ -70,17 +70,17 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
           type="button"
           onClick={handlePlayAll}
           className="min-w-[10.5rem] flex items-center justify-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
-          title="Play entire collection"
+          title="Play Saved Songs"
         >
           {isCollectionPlaying ? (
             <>
               <Pause className="w-3.5 h-3.5 fill-neutral-950" />
-              <span>Pause Collection</span>
+              <span>Pause Saved Songs</span>
             </>
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-neutral-950 ml-0.5" />
-              <span>Play Collection (Audio)</span>
+              <span>Play Saved Songs</span>
             </>
           )}
         </button>
@@ -89,7 +89,7 @@ export const PlayCollectionBar: React.FC<PlayCollectionBarProps> = ({
           type="button"
           onClick={handleShuffle}
           className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-medium text-neutral-200 bg-neutral-800 hover:bg-neutral-700 hover:text-white border border-neutral-700 transition-all cursor-pointer"
-          title="Shuffle and play collection"
+          title="Shuffle and play Saved Songs"
         >
           <Shuffle className="w-3.5 h-3.5 text-neutral-300" />
           <span>Shuffle</span>

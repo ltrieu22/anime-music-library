@@ -1,15 +1,17 @@
 import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
-import type { AnimeSongEntry } from '../types';
+import type { AnimeSongEntry, NoteSongSnapshot } from '../types';
 
 interface RemoveSongModalProps {
-  entry: AnimeSongEntry;
+  entry: AnimeSongEntry | NoteSongSnapshot;
   onClose: () => void;
-  onRemove: (id: number) => Promise<void>;
+  onRemove?: (id: number) => Promise<void>;
+  onConfirm?: () => Promise<void>;
+  playlistName?: string;
 }
 
-export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalProps) {
+export function RemoveSongModal({ entry, onClose, onRemove, onConfirm, playlistName }: RemoveSongModalProps) {
   const { displayTitle } = useTitleLanguage();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -29,7 +31,7 @@ export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalPro
       dialog.close();
       document.body.style.overflow = previousOverflow;
       if (returnTarget?.isConnected) returnTarget.focus();
-      else document.getElementById('search-input')?.focus();
+      else (document.getElementById('playlist-detail-heading') ?? document.getElementById('search-input'))?.focus();
     };
   }, []);
 
@@ -43,7 +45,9 @@ export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalPro
     setIsRemoving(true);
     setError('');
     try {
-      await onRemove(entry.id);
+      if (onConfirm) await onConfirm();
+      else if (onRemove && typeof entry.id === 'number') await onRemove(entry.id);
+      else throw new Error('Missing removal action');
       onClose();
     } catch {
       setError('Could not remove this song. Check that this browser allows saving site data, then try again.');
@@ -108,11 +112,11 @@ export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalPro
           <p className="text-sm text-neutral-300">{displayTitle(entry)}</p>
           {entry.artist && <p className="text-xs text-neutral-400">{entry.artist}</p>}
           <p className="text-xs font-mono text-neutral-500">
-            #{entry.id}{entry.theme_type ? ` · ${entry.theme_type}` : ''}{entry.anime_year ? ` · ${entry.anime_year}` : ''}
+            {!playlistName && `#${entry.id}`}{entry.theme_type ? ` · ${entry.theme_type}` : ''}{entry.anime_year ? ` · ${entry.anime_year}` : ''}
           </p>
         </div>
         <p id="remove-song-description" className="text-sm leading-6 text-neutral-400">
-          Remove this song from My Collection? Your personal note will stay in Notes.
+          {playlistName ? `Remove this song from “${playlistName}”? Saved Songs, other playlists, and your personal note will stay.` : 'Remove this song from Saved Songs? Your personal note will stay in Notes.'}
         </p>
         {error && <p role="alert" className="rounded-lg border border-rose-800/60 bg-rose-950/50 p-3 text-sm text-rose-300">{error}</p>}
         <div className="flex flex-wrap justify-end gap-3 border-t border-neutral-800 pt-4">

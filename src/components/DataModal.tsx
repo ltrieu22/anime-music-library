@@ -189,6 +189,9 @@ export const DataModal: React.FC<DataModalProps> = ({
           )}
 
           {/* Export */}
+          <p className="text-xs leading-5 text-neutral-400">
+            JSON backups currently include Saved Songs and personal notes. Custom playlists are not included yet.
+          </p>
           <div className="bg-neutral-900/80 border border-neutral-800 p-4 rounded-xl flex items-center justify-between gap-4">
             <div>
               <div className="font-semibold text-neutral-200 text-sm flex items-center gap-2">

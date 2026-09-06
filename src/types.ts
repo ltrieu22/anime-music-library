@@ -6,6 +6,8 @@ export interface AnimeTitleMetadata {
 
 export interface AnimeSongEntry extends AnimeTitleMetadata {
   id: number;
+  /** Persistent manual-song identity shared by custom playlists. */
+  local_song_id?: string;
   /** Stable catalog identifier when this collection entry was copied from the catalog. */
   source_song_id?: string | number;
   anime_name: string;

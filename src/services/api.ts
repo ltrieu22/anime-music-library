@@ -47,6 +47,19 @@ export async function fetchEntries(): Promise<AnimeSongEntry[]> {
   return getLocalEntries();
 }
 
+/** Lazily identify legacy manual songs without changing saved numbers or notes. */
+export function ensureLocalSongIdentity(song: AnimeSongEntry): AnimeSongEntry {
+  const entries = getLocalEntries();
+  const current = entries.find((entry) => entry.id === song.id);
+  if (!current || current.anime_name !== song.anime_name || current.song_name !== song.song_name || current.artist !== song.artist) {
+    throw new Error('This saved song changed or was removed. Reopen Saved Songs and try again.');
+  }
+  if (current.source_song_id !== undefined || current.local_song_id) return current;
+  const identified = { ...current, local_song_id: crypto.randomUUID() };
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(entries.map((entry) => entry.id === song.id ? identified : entry)));
+  return identified;
+}
+
 export async function createEntry(entry: Omit<AnimeSongEntry, 'id'>): Promise<AnimeSongEntry> {
   const current = getLocalEntries();
   const maxId = current.length > 0 ? Math.max(...current.map((e) => e.id)) : 0;

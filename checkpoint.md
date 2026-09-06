@@ -1,6 +1,6 @@
 # Anime Song Database — project checkpoint
 
-Updated: 2026-09-06
+Updated: 2026-09-07
 
 ## Start here
 
@@ -8,9 +8,9 @@ This document records completed work and the next features discussed with the us
 
 The user wants work split to accommodate their Codex five-hour usage window. The batches below are deliberately small and independently resumable. Scope estimates are engineering estimates, not guarantees about Codex usage or how much work a usage window allows. Start with one batch per session and reserve room for verification and a handoff. Do not combine all batches into one task.
 
-**Batch 12 is complete. Next eligible batch: 9 — collection library and playlist creation, not started. Batches 1, 2, 4, 5, 6, 7, 8, and 12 are complete.**
+**Batch 9 is complete. Next eligible batch: 10 — playlist membership, ordering, and playback, not started. Batches 1, 2, 4, 5, 6, 7, 8, 9, and 12 are complete.**
 
-The additional requests reviewed on 2026-09-05 are planned as batches 12–26 below, with dependencies, difficulty, and completion criteria. This update is planning only; none of those features has been implemented. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
+The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 below, with dependencies, difficulty, and completion criteria. Batch 12 is complete; batches 13–26 remain planned. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
 
 ## Current state — already implemented
 
@@ -46,7 +46,7 @@ Recommended direction from the discussion:
 - Reuse the song table and playback system across Saved Songs and named playlists.
 - Start with browser-local storage and JSON backup/restore. The expanded plan adds public song links in batch 22 and accounts/cloud saved-song sync in batches 24–26. Public/shared playlists remain a separate future feature.
 
-This structure was recommended and discussed; it has not been implemented. The exact visual arrangement is still open.
+Batch 9 implements the library as cards for built-in Saved Songs and custom playlists, with create/rename/delete dialogs and empty playlist details. Song assignment and custom playlist playback remain batch 10; playlist backup/restore remains batch 11.
 
 ### Playback and queue
 
@@ -109,7 +109,7 @@ References verified during the discussion:
 
 ## Batches for future sessions
 
-The remaining original sequence is 7–11. Independent UI/search batches can be moved earlier; a useful sequence for the new requests is 12 → 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
+The remaining original sequence is 10–11. Independent UI/search batches can be moved earlier; a useful sequence for the new requests is 12 → 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
 
 Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated state, schema, or interaction changes; **High** = external data, security, migration, or conflict handling. Dependencies below are implementation prerequisites, not new package requirements.
 
@@ -202,6 +202,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Establish stable song references and optional metadata snapshots so playlist membership will not depend on one collection entry continuing to exist.
 - **Done when:** the library and empty custom playlists survive reload; existing saved songs, notes, and Save actions still work. Reuse batch-2 removal UI if available.
 - Song assignment and playback follow in batch 10.
+- **Complete on 2026-09-07:** library, persistent empty playlists, create/rename/delete dialogs, independent song-reference schema, and compatibility checks passed. See the batch-9 handoff below.
 
 ### Batch 10 — playlist songs and playback
 
@@ -224,7 +225,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - **Seasons:** all 38,821 browser rows and all 33,596 server rows already have `anime_vintage` in `Winter/Spring/Summer/Fall YYYY` form. There is no need for a bulk upstream fetch just to display/filter season. Collection and note snapshot types currently omit this field, so saving/importing must preserve it or resolve it by stable catalog identity.
 - **Other attributes:** neither catalog contains format, genre, demographic, adaptation source, or studio fields. `AnimeDetails` and the hover lookup already expose some AniList metadata, but an on-demand cover lookup is not a complete filter index. Enrich by anime ID into a reusable local metadata index, not a request per song/render. Interpret “source studio” as separate **Source** (manga, original, etc.) and **Studio** filters. The existing song `source` field identifies a catalog provider; use a distinct field such as `adaptation_source`.
 - **Player:** there is one `<video>` element serving both audio and video songs. `PlayerContext.tsx` initializes volume to **80%**, applies it before `.play()`, and has no volume storage key. The bottom bar already has volume/mute controls; its container mounts without an entrance animation. Preserve this one-element architecture.
-- **Artists:** desktop and mobile catalog artist names already have button actions for exact artist-ID search; their classes lack an explicit pointer cursor. Non-clickable collection/notes artist text should not imply a new action.
+- **Artists:** desktop and mobile catalog artist names have exact artist-ID actions and now use an explicit pointer cursor (batch 12). Non-clickable collection/notes artist text remains plain text.
 - **URLs and cloud:** view/filter state currently lives in React; there is no app URL hydration/history handling. Existing `URLSearchParams` usage constructs server API requests only. Saved songs and notes are browser-local; there is no user/session model or cloud database. Static GitHub Pages can remain the frontend if authentication and private storage use an external backend.
 
 ### Batch 12 — artist hover cursor
@@ -368,7 +369,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 
 The project uses React, TypeScript, Vite, Tailwind, and Node 24. GitHub Pages serves the static build, so core features must also work without the Express backend. Browser data is specific to the origin/profile; localhost, another port, and the deployed site do not share a collection.
 
-For implementation batches, run relevant checks once after the change: `npm run lint`, `npm test`, and `npm run build`, plus targeted browser checks for changed interactions. On Windows, `npm.cmd` avoids PowerShell script execution-policy issues. `npm test` discovers `src/services/*.test.ts` (22 tests across `api.test.ts`, `catalogEngine.test.ts`, and `animeTitles.test.ts` after batch 4). Use `npm run dev` for the local app at port 3000, reusing a healthy running server.
+For implementation batches, run relevant checks once after the change: `npm run lint`, `npm test`, and `npm run build`, plus targeted browser checks for changed interactions. On Windows, `npm.cmd` avoids PowerShell script execution-policy issues. `npm test` currently discovers 38 tests in `src/services/*.test.ts`, including title-language and queue-engine coverage added after batch 4. Use `npm run dev` for the local app at port 3000, reusing a healthy running server.
 
 ## Handoff instructions
 
@@ -381,12 +382,12 @@ At the end of each batch, update the table below with completed behavior, checks
 | 4 | Complete | Optional bilingual schema/helpers, persistence compatibility, resumable tool; two Heike mappings and cache reuse verified. Details below. |
 | 5 | Complete | All 38,821 rows enriched; original fields/order/identities preserved; zero unresolved mappings; report and backup retained |
 | 6 | Complete | Remembered EN/JP display, bilingual search, and uninterrupted playback through toggles; validation below |
-| 7 | Not started | Queue operations and behavior tests |
-| 8 | Not started | Queue actions/panel depends on batch 7 |
+| 7 | Complete | Editable queue engine with occurrence IDs, finite/manual queue rules, and reducer plus browser integration coverage. Validation details below. |
+| 8 | Complete | Responsive queue actions/panel with accessible removal, clearing, and move controls; desktop/mobile playback QA passed. Validation details below. |
 | 9 | Not started | Library and playlist creation |
 | 10 | Not started | Playlist songs/order/playback |
 | 11 | Not started | Backups and persistence validation |
-| 12 | Not started | Pointer cursor on existing artist buttons |
+| 12 | Complete | Pointer cursor on clickable desktop/mobile artists; exact-ID click and keyboard behavior verified. Offscreen Add Song covers also use native lazy loading. |
 | 13 | Not started | Upward bottom-bar entrance with reduced-motion support |
 | 14 | Not started | Persist global volume with 40% default |
 | 15 | Not started | Accent-insensitive search; preserve alias correctness |
@@ -489,7 +490,7 @@ Batch 6 validation and handoff (2026-09-06):
 - **Checks:** `npm.cmd run lint`, `npm.cmd test` (**26/26**), `npm.cmd run build`, and `git diff --check` passed. Tests cover both full Heike title queries returning exactly `song-34830`/`song-34831`, alternate titles, fallback behavior, legacy exact-ID resolution, preference reads, unchanged saved/note/playback identities, and existing alias/filter/data invariants. Vite build needed the same authorized ancestor-directory access documented in earlier batches.
 - **Browser QA:** the existing server at `http://127.0.0.1:3000/` serves the rebuilt production frontend. Both Heike queries found the same two rows under EN and JP; JP persisted after reload. Catalog playback kept the same URL, unpaused, while time advanced from 9.895s to 10.515s across a toggle. Floating-video and bottom-bar titles both showed JP. The existing private note was read without editing: its old snapshot resolved to `Sekai Saikyou no Kouei: Meikyuukoku no Shinjin Tansakusha`, remained searchable by romaji while EN was displayed, and showed JP in the note editor.
 - **Isolated collection/mobile QA:** used initially empty `http://127.0.0.2:3000/`, saved only Hikaru Toki, verified Saved remains set after switching, and checked English/romaji collection search and saved #1. Collection playback stayed unpaused at the same URL with time advancing from 13.791s to 13.828s across a toggle. At 390×844, checked mobile controls and JP removal-dialog title; both language buttons measured 44×44px. Removed the single temporary QA song through the dialog, confirmed empty collection/zero notes, closed playback and the QA tab, and reset the viewport.
-- **User handoff:** retained a browser tab at `http://127.0.0.1:3000/` with English selected and `Heike Monogatari` in search, showing the two matching songs. The user's empty collection and existing note are preserved. The attempted dev-server start found port 3000 already occupied, so the existing server was reused after building. No unfinished batch-6 work; batch 7 is not started.
+- **User handoff (historical batch-6 state):** retained a browser tab at `http://127.0.0.1:3000/` with English selected and `Heike Monogatari` in search, showing the two matching songs. The user's empty collection and existing note were preserved. The attempted dev-server start found port 3000 already occupied, so the existing server was reused after building. Batch 6 had no unfinished work; batch 7 had not started at this handoff and has since been completed.
 
 Earlier batch-7 prompt (completed):
 
@@ -525,6 +526,22 @@ Batch 8 validation and handoff (2026-09-06):
 - **Remaining work:** none for batch 8. Queue state remains session-only as designed in batch 7. Playlist library/creation belongs to batch 9; playlist membership/playback and backups remain batches 10–11.
 - **Save-button follow-up:** prevented desktop/mobile Save labels from wrapping or shrinking under the added queue action; desktop bookmark/check icons retain their size. Rebuilt and checked all 80 rendered catalog Save buttons at desktop and 390px mobile widths; labels stayed on one line and desktop icons remained 12px. No saved data was changed.
 
-Suggested next prompt:
+Earlier batch-9 prompt (completed):
 
 > Read checkpoint.md and implement batch 9 only: My Collection as a library with built-in Saved Songs and browser-local custom playlist creation, renaming, and deletion. Preserve saved entries/order, notes, bilingual titles, and queue behavior. Validate persistence and compatibility, update this checkpoint, and stop before batch 10.
+
+
+Batch 9 validation and handoff (2026-09-07):
+
+- **Scope/files:** added `CollectionLibrary.tsx`, `playlistsStorage.ts`, and six service regression tests. My Collection opens a library of cards; Saved Songs opens the existing filtered song table and playback controls. Custom cards open empty detail pages with Rename/Delete and a clear message that adding songs is coming soon. Updated saved-song labels and added a truthful backup-scope note in Manage Data. Preserved the pre-existing checkpoint edits. No commits, pushes, catalog changes, user-data migrations, song assignment, or later batches were performed.
+- **Storage:** custom playlists use the separate `anime-db:playlists` key with `{ version: 1, playlists: [{ id, name, songs: [] }] }`. UUIDs persist through renaming; Saved Songs is a virtual built-in list (`saved-songs`) backed by the unchanged `anime_songs_db_v1` entries and saved-number order. Names are trimmed, limited to 80 characters, unique ignoring case, and cannot use the reserved Saved Songs name. Existing browsers need no migration or initial write. Malformed/unsupported data is retained and shown as an error; mutation failures remain in the dialog and do not update the visible library. Same-origin storage events refresh the library; operations read the latest stored lists before writing. Simultaneous writes in different tabs are still localStorage last-writer-wins, not transactional cloud synchronization.
+- **Foundation for batch 10:** `PlaylistSongReference` uses `(source, songId)` identity, separate from playlist IDs, saved numbers, and queue occurrence IDs. Catalog references can carry independent metadata snapshots; local/manual references require a snapshot and receive a UUID. `createSongReference` clones bilingual/media metadata and resolves saved catalog copies through `source_song_id`. Reuse an existing manual reference across playlists; the helper creates a new identity each time it is called for a manual song. Batch 10 must establish the assignment-time mapping/reuse of those references, without relying on the continuing existence of a numeric saved entry. No membership UI or collection migration was added here.
+- **Dialogs/accessibility:** reused the batch-2 native modal pattern and styling: focus containment, background inertness, Escape/close/backdrop cancellation, focus restoration, and initial Cancel focus for deletion. Global shortcuts defer to open native dialogs. New controls have 44px minimum targets and visible focus styles; errors and mutation results are announced. Deleting a playlist returns to the library heading and does not modify Saved Songs, notes, other playlists, or active playback.
+- **Checks:** `npm.cmd run lint`, `npm.cmd test` (**44/44**, including six new playlist tests), `npm.cmd run build`, and `git diff --check` passed. Service tests cover legacy empty state, IDs and reload persistence, name validation, built-in protection, invalid/future storage preservation, failed reads/writes, stale IDs/latest-state edits, and snapshot identity/media/title isolation. Build required the same authorized Vite ancestor-folder access as earlier batches.
+- **Browser QA:** on isolated `http://127.0.0.2:3000/`, verified create, rename then reload, blank/duplicate name errors, mobile library and delete dialog at 390×844, Cancel focus, Escape cancellation/focus restoration, deletion leaving another playlist intact, and deletion persistence after reload. Saved unified perspective then Hikaru Toki through Catalog Save; Saved Songs displayed #1 and #2 in that order with JP titles. Removing #1 left #2 unchanged. Play Saved Songs started the existing collection queue; navigation to the library and playlist creation preserved the media URL and unpaused playback while time advanced from 8.605s to 9.481s. All three temporary playlists and both temporary saved songs were removed through the site, playback closed, and empty state verified after reload. No test notes were created. The viewport override was reset and the QA tab closed.
+- **User handoff:** rebuilt production app is running on port 3000, started with `NODE_ENV=production` / `npm.cmd start` after confirming the port was free. At `http://127.0.0.1:3000/`, the user's empty collection, English preference, and existing one note were preserved; the Notes row/editor action remains available. Left a browser tab on My Collection. No playlist writes were made on the user's normal origin.
+- **Remaining work:** none for batch 9. Playlist membership, ordering, and playback are batch 10. JSON backups still contain only saved songs and notes; playlist backup/restore is batch 11 and Manage Data states this limitation. Existing song import/reset does not change custom playlists.
+
+Suggested next prompt:
+
+> Read checkpoint.md and implement batch 10 only: playlist membership, persistent ordering, and playback. Reuse the batch-9 stable song references and batch-7/8 queue APIs. Add playlist assignment from Catalog/Saved Songs, per-playlist removal, and playlist playback. Verify one song can belong to two playlists independently, preserve Saved Songs/notes/bilingual titles, update this checkpoint, and stop before batch 11.

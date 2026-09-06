@@ -76,6 +76,9 @@ export const sanitizeEntry = (
   const sourceSongId = sanitizeIdentifier(value.source_song_id);
   if (sourceSongId !== null) entry.source_song_id = sourceSongId;
 
+  const localSongId = sanitizeIdentifier(value.local_song_id);
+  if (typeof localSongId === 'string') entry.local_song_id = localSongId;
+
   return entry;
 };
 
