@@ -8,7 +8,7 @@ This document records completed work and the next features discussed with the us
 
 The user wants work split to accommodate their Codex five-hour usage window. The batches below are deliberately small and independently resumable. Scope estimates are engineering estimates, not guarantees about Codex usage or how much work a usage window allows. Start with one batch per session and reserve room for verification and a handoff. Do not combine all batches into one task.
 
-**Batch 5 is complete. Batch 3 remains explicitly deferred by the user. Next eligible title batch: 6 — JP/EN toggle and bilingual search, not started. Batches 1, 2, 4, and 5 are complete.**
+**Batch 8 is complete. Next eligible batch: 9 — collection library and playlist creation, not started. Batches 1, 2, 4, 5, 6, 7, and 8 are complete.**
 
 The additional requests reviewed on 2026-09-05 are planned as batches 12–26 below, with dependencies, difficulty, and completion criteria. This update is planning only; none of those features has been implemented. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
 
@@ -26,7 +26,7 @@ The additional requests reviewed on 2026-09-05 are planned as batches 12–26 be
 The earlier playback changes are committed through `86f4d2c`. The planning review on 2026-09-05 found batches 1 and 2 committed in `e164e0b` (`false artist search fix,  added in-site song removal`); only `checkpoint.md` was untracked. Inspect `git status` before editing and preserve subsequent changes. Remote status was not refreshed during this planning review. Later batches were not implemented at that review; subsequent results are recorded below. The development server's usual address is `http://127.0.0.1:3000/`; check its current state instead of assuming it is still running.
 
 - Source-of-truth cleanup was completed before batch 4: `public/data/anime_catalog.json` is the single canonical full 38,821-song source. The incomplete `data/anime_catalog.json` was removed; Vite generates `dist/data/anime_catalog.json` from `public/`. The server reads the canonical source with a built-copy fallback. The default/reset year range is now 1924–2026, preserving 1,173 pre-1980 records. These cleanup changes were already present and were preserved during batch 4.
-- Batch 4 adds optional bilingual metadata and shared title helpers, preserves it in conversion/saved-song/note/backup paths, and provides a resumable enrichment tool. Batch 5 has now enriched all 38,821 canonical rows with English/romaji titles and alternate-title arrays; all original fields and identities are preserved. UI title selection and bilingual searching remain batch 6.
+- Batch 4 adds optional bilingual metadata and shared title helpers, preserves it in conversion/saved-song/note/backup paths, and provides a resumable enrichment tool. Batch 5 has now enriched all 38,821 canonical rows with English/romaji titles and alternate-title arrays; all original fields and identities are preserved. Batch 6 now adds remembered EN/JP display selection and bilingual searching.
 
 - Batch 1 now uses `src/services/catalogSearch.ts` for both browser and optional server typed searches. Alias keys must match complete artist phrases; related names also use boundaries in the artist field. Other query words remain required, while direct anime/song/artist substring matching remains available.
 - Searching `Heike` returns only `song-34830` and `song-34831`. IKE/SPYAIR expansion, complete multiword artist aliases, year/theme filters, canonical artist-ID lookup, and private-note search are preserved.
@@ -62,11 +62,10 @@ Keep persistent song identity separate from playback occurrence identity. The sa
 
 Current collection playback wraps to the beginning at its end; single-song catalog playback stops. Preserve that distinction unless intentionally changing repeat behavior. A finite manually assembled queue should have a defined stopping rule.
 
-### Removal and mini-player
+### Removal
 
 - Replace the browser's `window.confirm` removal prompt with UI inside the site.
 - A styled confirmation dialog is the smallest complete version. Immediate removal with Undo was recommended as an alternative; restoring the original saved position is required if Undo is chosen.
-- The mini-player request was interpreted as replacing the floating video's native browser controls with controls matching the existing custom bottom player. Verify the intended surface when starting that batch if the user's wording remains ambiguous. Retain the single underlying media element.
 
 ## Confirmed findings to reuse
 
@@ -96,7 +95,7 @@ AniSongDB's API provides `animeENName`, `animeJPName`, and `animeAltName`. A liv
 - English: `The Heike Story`
 - Japanese romaji: `Heike Monogatari`
 
-At the initial review, our bundled catalog stored one `anime_name` per entry. `mapAnisongDbSong` in `src/services/anisongdbArtists.ts` chose English first and Japanese as a fallback, discarding the alternative. This was **not** a hidden toggle that could simply be enabled. Batches 4–5 now preserve and populate the optional title metadata; the toggle itself remains batch 6.
+At the initial review, our bundled catalog stored one `anime_name` per entry. `mapAnisongDbSong` in `src/services/anisongdbArtists.ts` chose English first and Japanese as a fallback, discarding the alternative. This was **not** a hidden toggle that could simply be enabled. Batches 4–5 now preserve and populate the optional title metadata; batch 6 now implements the display toggle.
 
 Enrich the existing catalog by stable song ID and retain both title variants and useful alternate names. Search all variants regardless of display preference; the toggle changes presentation only. Keep existing IDs, saved status, notes, media URLs, and ordering intact. No translation service is needed.
 
@@ -110,7 +109,7 @@ References verified during the discussion:
 
 ## Batches for future sessions
 
-The original sequence remains 3–11. Independent UI/search batches can be moved earlier; a useful sequence for the new requests is 12 → 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
+The remaining original sequence is 7–11. Independent UI/search batches can be moved earlier; a useful sequence for the new requests is 12 → 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
 
 Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated state, schema, or interaction changes; **High** = external data, security, migration, or conflict handling. Dependencies below are implementation prerequisites, not new package requirements.
 
@@ -118,7 +117,6 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 | --- | --- | --- | --- | --- |
 | 1 | Fix false artist-alias search matches | None | Medium | 30–90 minutes |
 | 2 | In-site song removal | None | Medium | 1–2 hours |
-| 3 | Consistent floating-player controls | Existing player | Medium | 2–3 hours |
 | 4 | Bilingual title fields and resumable enrichment tool | None | Medium | 2–3 hours |
 | 5 | Enrich and validate the catalog | 4 | Medium | One bounded data run; resume if needed |
 | 6 | JP/EN toggle and bilingual search | 1, 4, 5 | Medium | 2–3 hours |
@@ -129,7 +127,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 | 11 | Playlist backup/restore and persistence checks | 9–10 | Medium | 1–2 hours |
 | 12 | Pointer cursor on clickable artists | Existing artist actions | Low | 15–30 minutes |
 | 13 | Bottom player slides upward into view | Existing player | Low | 30–60 minutes |
-| 14 | Persistent master volume, default 40% | Existing player; coordinate with 3 | Low–Medium | 1–2 hours |
+| 14 | Persistent master volume, default 40% | Existing player | Low–Medium | 1–2 hours |
 | 15 | Accent-insensitive typed search | 1 complete; reuse in 6 | Medium | 1–2 hours |
 | 16 | Reach every search result with pagination | Existing search; independent of 15 | Medium | 2–3 hours |
 | 17 | Season/year display and basic season filter | Existing vintage data | Low–Medium | 1–2 hours |
@@ -157,13 +155,6 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - **Done when:** delete/cancel works on desktop and mobile without a browser confirmation popup. Undo, if included, restores the same entry and position.
 - Bulk deletion and playlist deletion can reuse this interaction later; do not add them now.
 
-### Batch 3 — floating-player controls
-
-- Replace the native `<video controls>` UI with custom play/pause, seek, volume/mute, fullscreen, and hide-video controls matching the current player.
-- Reuse shared player state and one media element. Keep dragging/resizing and uninterrupted audio when hiding video.
-- **Done when:** controls remain synchronized with the bottom bar and usable on mobile, with keyboard labels/focus and working fullscreen.
-- Queue controls belong to batch 8.
-
 ### Batch 4 — bilingual data preparation
 
 - Add backward-compatible English/romaji/alternate-title fields and a shared display/search-title resolver with sensible missing-title fallbacks.
@@ -187,6 +178,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Apply it consistently to catalog, Saved Songs/collection, notes, hover information, and player titles as appropriate.
 - Search English, romaji, and alternate titles under either preference. Keep IDs, saved indicators, notes, and playlist/queue membership independent of displayed names.
 - **Done when:** both Heike Monogatari and The Heike Story find the same two songs, changing language only changes displayed titles, and playback continues through a toggle.
+- **Complete on 2026-09-06:** remembered preference, display integration, bilingual search, 26 passing tests, and browser playback/persistence checks. See batch-6 handoff below.
 
 ### Batch 7 — queue engine
 
@@ -194,12 +186,14 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Separate the active playback context from a song's membership in a saved list. Use distinct queue-item IDs if repeated songs are supported.
 - Define behavior for an empty queue, removing the next/current item, repeated songs, queue completion, and switching from a playlist to a catalog song. Add focused behavioral tests.
 - **Done when:** those transitions are tested and the existing player/collection experience still works. The new APIs can be handed off before the new panel exists.
+- **Complete on 2026-09-06:** atomic queue reducer, occurrence IDs, editable context APIs, 38 passing unit tests, 10 browser integration checks, and real catalog playback smoke checks. See batch-7 handoff below.
 
 ### Batch 8 — queue UI
 
 - Add Add to queue in song actions and a Show queue control in the player. Provide a responsive panel with Now Playing and upcoming items.
 - Support removal, clear-upcoming, and accessible move-up/down ordering first. Play next and drag-and-drop are optional follow-ups if they exceed this batch.
 - **Done when:** a user can play one catalog song, queue others without interruption, inspect/edit the upcoming order, and hear that order on advancement. Closing the panel must not stop audio.
+- **Complete on 2026-09-06:** catalog/collection/note queue actions, responsive queue panel, accessible occurrence removal/reordering, and desktop/mobile playback verification. See batch-8 handoff below.
 
 ### Batch 9 — library and playlist creation
 
@@ -250,7 +244,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Reuse the existing global slider/state, initializing from a versioned local-storage preference with **40%** fallback (within the requested 30–50% range). Validate finite values, clamp to 0–1, preserve a valid zero, and tolerate unavailable/corrupt storage.
 - Persist changes and define mute restoration separately from the remembered unmuted volume. Apply volume/mute before playback for every newly mounted media element or changed source. Keep bottom/floating controls synchronized, including native `volumechange` events while native controls remain.
 - There is currently only one media element; future `<audio>`/`<video>` surfaces must bind to the same preference. Check target mobile-browser support and report any platform-controlled volume limitation. This is gain control, not automatic loudness normalization between differently mastered songs.
-- **Done when:** default is 40%, chosen volume survives reload/close/reopen/track and view changes, zero/mute behave correctly, and there is no initial full-volume burst. Coordinate with batch 3; neither batch requires the other to start.
+- **Done when:** default is 40%, chosen volume survives reload/close/reopen/track and view changes, zero/mute behave correctly, and there is no initial full-volume burst.
 
 ### Batch 15 — accent-insensitive search
 
@@ -382,11 +376,10 @@ At the end of each batch, update the table below with completed behavior, checks
 | Batch | Status | Result / next action |
 | --- | --- | --- |
 | 1 | Complete | Shared browser/server alias boundary fix; Heike returns exactly the two expected IDs. Validation details below. |
-| 2 | Complete | Site-styled individual removal with accessible focus/cancellation, note/order preservation, and storage-write error reporting. Next: batch 3. |
-| 3 | Not started | Explicitly deferred by user; confirm intended mini-player surface when resumed |
+| 2 | Complete | Site-styled individual removal with accessible focus/cancellation, note/order preservation, and storage-write error reporting. |
 | 4 | Complete | Optional bilingual schema/helpers, persistence compatibility, resumable tool; two Heike mappings and cache reuse verified. Details below. |
 | 5 | Complete | All 38,821 rows enriched; original fields/order/identities preserved; zero unresolved mappings; report and backup retained |
-| 6 | Not started | Toggle/search depends on enriched titles |
+| 6 | Complete | Remembered EN/JP display, bilingual search, and uninterrupted playback through toggles; validation below |
 | 7 | Not started | Queue operations and behavior tests |
 | 8 | Not started | Queue actions/panel depends on batch 7 |
 | 9 | Not started | Library and playlist creation |
@@ -394,7 +387,7 @@ At the end of each batch, update the table below with completed behavior, checks
 | 11 | Not started | Backups and persistence validation |
 | 12 | Not started | Pointer cursor on existing artist buttons |
 | 13 | Not started | Upward bottom-bar entrance with reduced-motion support |
-| 14 | Not started | Persist global volume with 40% default; coordinate with 3 |
+| 14 | Not started | Persist global volume with 40% default |
 | 15 | Not started | Accent-insensitive search; preserve alias correctness |
 | 16 | Not started | Pagination across complete results, including matches beyond 500 |
 | 17 | Not started | Reuse vintage data for season/year display and filtering |
@@ -446,7 +439,7 @@ Batch 4 validation and handoff (2026-09-06):
 - **Exact sample/resume command actually run:** `npm.cmd run enrich:titles -- --ids song-34830,song-34831 --limit 2 --preview`. First successful run: 1 request, 2 fetched IDs, 0 cache hits, 2 matched. Identical rerun: **0 requests, 0 fetched IDs, 2 cache hits, 2 matched**. The first sandboxed network attempt was denied with EACCES; the authorized retry succeeded. No full-catalogue enrichment command was run.
 - **Validation actually run:** `npm.cmd run lint` passed; `npm.cmd test` passed **22/22**; `npm.cmd run build` passed after the usual sandbox ancestor-directory read failure and authorized retry; `git diff --check` passed. An initial persistence test incorrectly supplied catalogue-only fields to a saved-record fixture; the fixture was corrected to match the existing Save shape, and lint/tests were rerun successfully. Offline checks cover old records/backups, fallback order, title variants and immutable values, identity/order preservation, Heike mapping, rejected candidates, bounded resume/cache reuse, failed-request recovery, explicit unresolved retries, and staging against a temporary **two-song-only** fixture. No browser UI changes were made or browser QA claimed.
 - **Canonical/build invariants:** source remains 38,821 rows and unique IDs, with OP 8,873 / ED 15,317 / IN 14,631 and 1,173 pre-1980 records (catalog regressions passed). Before/after source SHA-256: `05850c16b7c31a9e9f3d0440f72f2589394137d15c7aaf96824c997fd4eba927`. The rebuilt `dist/data/anime_catalog.json` has the same hash. Production records containing any new bilingual field: **0**. `.cache/title-enrichment/anime_catalog.enriched.json` has **not** been created for the production catalogue.
-- **Unresolved issues:** none for batch 4 or the two Heike mappings. Full-catalogue title coverage is intentionally unknown. Conservative exact checks may report upstream corrections as mismatches in batch 5; inspect those records rather than relaxing matching or guessing. UI language choice/bilingual matching remain batch 6. Batch 3 stays deferred; batches 5 and 6 remain not started.
+- **Unresolved issues:** none for batch 4 or the two Heike mappings. Full-catalogue title coverage is intentionally unknown. Conservative exact checks may report upstream corrections as mismatches in batch 5; inspect those records rather than relaxing matching or guessing. UI language choice/bilingual matching remain batch 6. Batches 5 and 6 remain not started.
 
 Exact commands for **batch 5 only**, from the repository root (recorded, not executed):
 
@@ -465,7 +458,7 @@ npm.cmd run enrich:titles -- --full --stage
 
 Batch 5 validation and handoff (2026-09-06):
 
-- **Scope/files:** enriched only `public/data/anime_catalog.json`; added `scripts/validate-title-enrichment.ts`, its `validate:titles` package command, and `data/catalog-title-enrichment-report.json`; updated this checkpoint. All prior source-cleanup and batch-4 changes were preserved. No UI/search behavior, user collection/notes, unrelated data, commits, or deployments were changed. Batch 3 remains deferred and batch 6 is not started.
+- **Scope/files:** enriched only `public/data/anime_catalog.json`; added `scripts/validate-title-enrichment.ts`, its `validate:titles` package command, and `data/catalog-title-enrichment-report.json`; updated this checkpoint. All prior source-cleanup and batch-4 changes were preserved. No UI/search behavior, user collection/notes, unrelated data, commits, or deployments were changed. Batch 6 is not started.
 - **Run actually completed:** `npm.cmd run enrich:titles -- --full --preview` fetched 38,819 uncached IDs in 389 sequential bounded requests and reused the two Heike cache entries. All 38,821 exact song-ID mappings passed the existing conservative checks. Unmatched: **0**; ambiguous: **0**; mismatched: **0**; pending: **0**; unexpected upstream IDs: **0**. No fuzzy fallback, AniList-based candidate selection, or matching-rule relaxation was needed.
 - **Cache-only staging:** `npm.cmd run enrich:titles -- --full --stage` reused **38,821 cache hits with zero requests** and wrote `.cache/title-enrichment/anime_catalog.enriched.json`. Raw responses, progress, and preview remain in the batch-4 cache paths. The successful full-run result supersedes the earlier batch-4 sample-only state; historical batch-4 entries above describe that earlier stopping point.
 - **Validation/promotion:** `npm.cmd run validate:titles` compared every existing field on every row against the original canonical catalogue, checked that the only new fields were the three title fields, required staged metadata to match the corresponding approved mapping, verified row order/IDs and note keys/fingerprints, and checked coverage, types, counts and examples. Only after it passed, `npm.cmd run validate:titles -- --promote` atomically replaced the canonical file with compact validated JSON. The original bytes were backed up to `.cache/title-enrichment/anime_catalog.original.json`; the validator refuses to overwrite an unrelated backup. A detailed durable report is in `data/catalog-title-enrichment-report.json`, with the local validation copy at `.cache/title-enrichment/validation.json`.
@@ -478,12 +471,59 @@ Batch 5 validation and handoff (2026-09-06):
 
 Earlier batch-5 prompt (completed):
 
-> Read checkpoint.md and implement batch 5 only. Use the canonical public/data/anime_catalog.json and the batch-4 cache/tool. Enrich in resumable bounded runs, inspect unresolved mappings, validate the staged output and unchanged original fields before promotion, document coverage and size, update the checkpoint, and stop before batch 6. Keep batch 3 deferred.
+> Read checkpoint.md and implement batch 5 only. Use the canonical public/data/anime_catalog.json and the batch-4 cache/tool. Enrich in resumable bounded runs, inspect unresolved mappings, validate the staged output and unchanged original fields before promotion, document coverage and size, update the checkpoint, and stop before batch 6.
 
-Suggested next title-batch prompt:
+Earlier batch-6 prompt (completed):
 
-> Read checkpoint.md and implement batch 6 only. Use the already enriched canonical catalogue, add a remembered JP/EN display preference and bilingual search, preserve all song/saved/note/playback identities, validate both Heike title variants and uninterrupted playback during toggles, update the checkpoint, and stop before batch 7. Keep batch 3 deferred; do not rerun enrichment.
+> Read checkpoint.md and implement batch 6 only. Use the already enriched canonical catalogue, add a remembered JP/EN display preference and bilingual search, preserve all song/saved/note/playback identities, validate both Heike title variants and uninterrupted playback during toggles, update the checkpoint, and stop before batch 7. Do not rerun enrichment.
 
-Earlier suggested batch-3 prompt (retained for when the user resumes that deferred batch):
 
-> Read checkpoint.md and implement batch 3 only. Preserve current changes and existing player behavior. Replace the floating video's native controls with controls matching the bottom player, retain one media element and dragging/resizing, validate playback/fullscreen/mobile behavior, update the checkpoint, and stop before batch 4.
+
+Batch 6 validation and handoff (2026-09-06):
+
+- **Scope:** added the header EN/JP toggle and `TitleLanguageContext.tsx`; extended shared title helpers and catalog matching; integrated collection/private-note matching, desktop/mobile rows, hover title/cover alt text, note/removal dialogs, and both player title surfaces. `SongTrack` carries optional title metadata independently of its existing ID and media URL. Added `titleLanguage.test.ts` and extended catalog regressions. No catalog enrichment, commits, pushes, or later batches were performed.
+- **Preference:** English is the default; JP displays upstream romaji titles. The separate `anime-db:title-language` storage key remembers changes and synchronizes same-origin tabs. Invalid/unavailable storage falls back to English; a failed save keeps the in-session selection and shows a small status message. Each toggle target is 44×44px with a descriptive label, pressed state and keyboard focus style.
+- **Identity and compatibility:** original `anime_name`, stable IDs, saved keys/numbers, note keys, sort order, playback queue and media URLs remain unchanged. Display uses preferred title, other language, legacy title, then `Unknown Anime`. Existing saved copies/notes missing metadata resolve titles in memory by exact `source_song_id` or catalog ID from the already cached canonical catalog; no browser collection/note migration or guessed manual-entry mapping. Legacy records without a matching catalog ID keep their existing title. Links/cover lookups continue using stable IDs and legacy names. Anime-name sorting retains its existing underlying-name order across a toggle.
+- **Search:** bundled browser and optional server use the shared matcher over legacy, English, romaji and alternate titles. Collection and private-note matching also use all variants, retaining note text, artist, song and theme searches. Artist alias boundaries and extra-term requirements remain intact; accent-insensitive normalization and pagination stay in their separate future batches. Earlier English-only partial-search test expectations were updated to include the newly searchable fields.
+- **Checks:** `npm.cmd run lint`, `npm.cmd test` (**26/26**), `npm.cmd run build`, and `git diff --check` passed. Tests cover both full Heike title queries returning exactly `song-34830`/`song-34831`, alternate titles, fallback behavior, legacy exact-ID resolution, preference reads, unchanged saved/note/playback identities, and existing alias/filter/data invariants. Vite build needed the same authorized ancestor-directory access documented in earlier batches.
+- **Browser QA:** the existing server at `http://127.0.0.1:3000/` serves the rebuilt production frontend. Both Heike queries found the same two rows under EN and JP; JP persisted after reload. Catalog playback kept the same URL, unpaused, while time advanced from 9.895s to 10.515s across a toggle. Floating-video and bottom-bar titles both showed JP. The existing private note was read without editing: its old snapshot resolved to `Sekai Saikyou no Kouei: Meikyuukoku no Shinjin Tansakusha`, remained searchable by romaji while EN was displayed, and showed JP in the note editor.
+- **Isolated collection/mobile QA:** used initially empty `http://127.0.0.2:3000/`, saved only Hikaru Toki, verified Saved remains set after switching, and checked English/romaji collection search and saved #1. Collection playback stayed unpaused at the same URL with time advancing from 13.791s to 13.828s across a toggle. At 390×844, checked mobile controls and JP removal-dialog title; both language buttons measured 44×44px. Removed the single temporary QA song through the dialog, confirmed empty collection/zero notes, closed playback and the QA tab, and reset the viewport.
+- **User handoff:** retained a browser tab at `http://127.0.0.1:3000/` with English selected and `Heike Monogatari` in search, showing the two matching songs. The user's empty collection and existing note are preserved. The attempted dev-server start found port 3000 already occupied, so the existing server was reused after building. No unfinished batch-6 work; batch 7 is not started.
+
+Earlier batch-7 prompt (completed):
+
+> Read checkpoint.md and implement batch 7 only: the editable queue engine. Preserve current title preferences/search and playback behavior, verify the queue transitions listed in batch 7, update this checkpoint, and stop before batch 8.
+
+Batch 7 validation and handoff (2026-09-06):
+
+- **Git baseline:** latest local commit `ec924e2` (`Unify catalog and enrich titles`) matched the live GitHub `refs/heads/main` hash, verified with `git ls-remote origin refs/heads/main`. There were no unpushed commits. The existing uncommitted batch-6 work was preserved. No new commit or push was made during batch 7.
+- **Scope:** added `src/services/playerQueue.ts` and `playerQueue.test.ts`; integrated the reducer into `PlayerContext.tsx`; added `QueueItem`/`QueueSource` types and clarified source identity in `utils/player.ts`. Added an isolated browser integration fixture at `tests/player-queue.html` / `tests/player-queue.tsx`. No queue action buttons/panel, playlists, data migrations, catalog edits, or later batches were implemented.
+- **API for batch 8:** `addToQueue(track | tracks)` appends; `removeQueueItem(queueItemId)` removes one occurrence; `clearUpcoming()` keeps current/history; `moveQueueItem(queueItemId, upcomingIndex)` moves an upcoming item to a zero-based position within `upcomingQueueItems`. Context exposes `queueItems`, `currentQueueItem`, `upcomingQueueItems`, `queueIndex`, and `queueSource`; legacy `queue: SongTrack[]` remains available. Use `queueItemId` for React list keys and edits, never the song ID. Queue IDs are monotonic within the provider lifetime and are not reused after close/replacement; queue persistence is outside this batch.
+- **Identity/media:** each occurrence is `{ queueItemId, track }`, so identical songs/URLs can repeat without changing song, saved, note, or title metadata. Queue transitions are atomic, including multiple calls within one React event. A playback revision changes for selection/advancement/replay, including the same occurrence wrapping; adding/removing noncurrent items, reordering, and clearing upcoming retain the active object and revision. Those edits preserve playback time and playing/paused state and do not assign a media source or call play again.
+- **Repeat/completion rules:** untouched collection playback retains wrapping, including a one-song collection. A catalog title starts a single song and stops at its end. Any effective manual edit changes `queueSource` to `manual` and makes the remaining sequence finite; history remains available through Previous, but completion never wraps. Clear-upcoming also disables wrapping when called at a collection's tail. Starting collection playback again replaces the queue and restores wrapping. This active playback source is independent of saved-list membership.
+- **Empty/removal/order rules:** adding to an empty player selects and starts the first appended song. Empty add/play-list calls and invalid/stale item edits are no-ops. Removing upcoming/history keeps the current occurrence; removing history adjusts the cursor. Removing current immediately starts its next remaining item; with no successor, it closes/unloads the player and clears history too. Clear-upcoming preserves current/history. Only upcoming items can be reordered; invalid targets and unchanged positions are no-ops. Finite completion retains the last song stopped for replay; appending afterward waits for Next rather than restarting or resuming it. Previous retains the existing >3-second restart behavior, walks available history, and does not wrap a manual queue. Close still clears all playback state; existing import/reset calls to close remain unchanged.
+- **Automated checks:** `npm.cmd run lint`, `npm.cmd test` (**38/38**, including 12 queue behavior tests), `npm.cmd run build`, and `git diff --check` passed. Tests cover empty/clamped inputs, repeated songs, stale IDs, removal/current-tail handling, history/cursor updates, upcoming reordering, clearing, finite completion, collection wrap, catalog replacement, close/restart identity, and unchanged input metadata. Build and the temporary Vite server required the same authorized ancestor-directory access as earlier batches.
+- **React/media integration:** the browser fixture passed **10 checks** under React StrictMode using the real provider and a simulated HTML media element. It verifies source-write/play-call counts, time and paused-state preservation, duplicate-URL restarts, manual end events, append after completion, collection/catalog rules, current removal, rapid batched replacements/additions, and unloading. These checks are separate from `npm test`. To rerun: `npm.cmd exec vite -- --host 127.0.0.1 --port 3001 --strictPort`, open `http://127.0.0.1:3001/tests/player-queue.html`, and click **Run checks**. The fixture uses no saved data or remote media and is outside the production entry/build.
+- **Real browser smoke:** rebuilt app at `http://127.0.0.1:3000/` found exactly two rows for `Heike Monogatari`. Hikaru Toki played from its existing URL with Next disabled. EN→JP switching retained that URL and unpaused playback while time advanced from 7.739s to 7.973s. Close removed the player bar, paused the media, and removed its `src`. English was restored; the empty collection and existing one note were preserved. Temporary QA tabs and the batch-7 Vite server were closed.
+- **Remaining work:** none for batch 7. The new queue APIs currently have no public controls; Add to queue and the editable queue panel belong to batch 8.
+
+Earlier batch-8 prompt (completed):
+
+> Read checkpoint.md and implement batch 8 only. Use the batch-7 queue APIs to add Add to queue actions and a responsive queue panel showing Now Playing and upcoming items, with remove, clear-upcoming, and accessible move-up/down controls. Preserve uninterrupted playback, use occurrence IDs, validate the UI, update this checkpoint, and stop before batch 9.
+
+Batch 8 validation and handoff (2026-09-06):
+
+- **Scope/files:** added `src/components/player/AddToQueueButton.tsx` and `QueuePanel.tsx`; integrated queue actions into both desktop/mobile `SongTable.tsx` and the panel toggle/count into `MusicPlayer.tsx`. Existing uncommitted batch-6/7 changes were preserved. No commits, pushes, catalog changes, storage migrations, playlists, Play next, or drag-and-drop were performed.
+- **Song actions:** catalog, collection, and private-note rows share Add to queue through the existing track conversion. Each click appends a separate occurrence without interrupting current media; an empty player starts the selected song. Buttons show brief checkmark feedback and announce the addition, remain available for duplicate additions, and are disabled when no playable media exists. Queue actions do not save/remove songs or modify notes. A title click while a manually edited queue is active replaces that queue with the normal catalog/saved-list playback context, including clicking the already-current song. Existing resume/no-restart behavior for an unchanged single/collection context remains.
+- **Queue panel:** Show queue in the bottom player exposes the upcoming count, expanded state, and a responsive nonmodal panel above the player. It shows Now Playing, anime language preference, artist/theme, numbered upcoming occurrences, repeat/stopping explanation, and an empty state. Clear upcoming retains current playback; each occurrence has removal controls; upcoming items have move-up/down buttons with boundary disabling. Current removal starts its successor or closes the player when none remains. All edits use `queueItemId`, so one duplicate can be changed independently. Closing/hiding the panel never closes the player or changes the queue.
+- **Accessibility/responsiveness:** queue-action and panel buttons have descriptive labels, visible keyboard focus, and 44×44px minimum targets. Reorder/removal announcements use a live status region. Opening focuses Close queue; Escape or Close restores focus to Show queue. Removing/reordering focuses the surviving/moved row, avoiding a removed or newly disabled button; closing the player falls back to search. Escape defers to open native dialogs. The nonmodal panel keeps page controls available and scrolls internally. Verified at 1280×720, 390×844, and 320×720. The mobile bar hides cover art/theme badges and reserves control width to fit the added queue button; desktop metadata remains visible.
+- **Checks:** `npm.cmd run lint`, `npm.cmd test` (**38/38**), `npm.cmd run build`, and `git diff --check` passed. The batch-7 real-provider/simulated-media browser fixture passed all **10 integration checks** again. These are engine/media checks; the new UI was verified through browser interactions rather than counted as new unit tests. Vite/build used the authorized filesystem access documented in earlier batches.
+- **Desktop playback QA:** on isolated `http://127.0.0.1:3001/`, played Hikaru Toki and appended unified perspective, Hikaru Toki, unified perspective. Media kept the same URL and remained unpaused while time advanced from 8.779s to 9.149s across additions and panel opening. Reordered and removed just one duplicate; distinct remaining occurrence IDs were observed. Paused edits preserved 32.216s and paused state. Escape restored Show queue focus. After reordering and seeking near the end through the scrub control, the native end event automatically advanced to unified perspective (`mv3tss.webm`) in the edited order. Clear upcoming disabled Next, preserved the current song, and it stopped naturally at its end.
+- **Collection/mobile QA:** saved one temporary Hikaru Toki on the initially empty 3001 origin, added its collection occurrence, removed that occurrence without deleting saved #1, and restarted Play Collection with the repeat explanation intact. Removing the last current song unloaded media and returned focus to search. Removed the temporary saved song through the normal dialog and confirmed collection **0**, notes **0**. Mobile panel buttons measured 44×44px and the panel/player fit the viewport; a discovered theme-badge overlap at 320px was fixed and rechecked. Viewport override was reset.
+- **Production/note QA:** port 3000 was no longer running at final verification, so started the rebuilt app with `$env:NODE_ENV = 'production'` then `npm.cmd start`. On `http://127.0.0.1:3000/`, the existing private note's Add to queue started playback from an empty player; a second click appended a duplicate. JP displayed the resolved romaji title for both current/upcoming without interrupting media. Closing the panel left the same media URL unpaused at 20.521s. Restored English, closed playback, and preserved the user's empty collection and one existing note without editing it. Temporary QA tabs and the 3001 Vite server were closed; the production app on 3000 is running.
+- **Remaining work:** none for batch 8. Queue state remains session-only as designed in batch 7. Playlist library/creation belongs to batch 9; playlist membership/playback and backups remain batches 10–11.
+- **Save-button follow-up:** prevented desktop/mobile Save labels from wrapping or shrinking under the added queue action; desktop bookmark/check icons retain their size. Rebuilt and checked all 80 rendered catalog Save buttons at desktop and 390px mobile widths; labels stayed on one line and desktop icons remained 12px. No saved data was changed.
+
+Suggested next prompt:
+
+> Read checkpoint.md and implement batch 9 only: My Collection as a library with built-in Saved Songs and browser-local custom playlist creation, renaming, and deletion. Preserve saved entries/order, notes, bilingual titles, and queue behavior. Validate persistence and compatibility, update this checkpoint, and stop before batch 10.

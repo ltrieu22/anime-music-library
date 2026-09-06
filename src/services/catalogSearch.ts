@@ -1,6 +1,7 @@
 import type { AnimeSongItem } from '../types';
+import { getSearchableAnimeTitles } from './animeTitles';
 
-type SearchableSong = Pick<AnimeSongItem, 'anime_name' | 'artist' | 'song_name'>;
+type SearchableSong = Pick<AnimeSongItem, 'anime_name' | 'anime_name_english' | 'anime_name_romaji' | 'anime_alt_names' | 'artist' | 'song_name'>;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -34,7 +35,7 @@ export function createCatalogQueryMatcher(query: string, aliases: Record<string,
 
   return (item: SearchableSong): boolean => {
     const artist = normalize(item.artist || '');
-    const combined = `${normalize(item.anime_name || '')} ${artist} ${normalize(item.song_name || '')}`;
+    const combined = `${getSearchableAnimeTitles(item).map(normalize).join(' ')} ${artist} ${normalize(item.song_name || '')}`;
     // Ordinary anime/song/artist searches keep their existing partial-word behavior.
     if (queryTerms.every((term) => combined.includes(term))) return true;
 

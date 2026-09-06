@@ -1,6 +1,25 @@
 import type { AnimeTitleMetadata } from '../types';
 
-type TitleSource = AnimeTitleMetadata & { anime_name?: string };
+export type TitleSource = AnimeTitleMetadata & { anime_name?: string; id?: string | number; source_song_id?: string | number };
+export type TitleLanguage = 'en' | 'jp';
+export const TITLE_LANGUAGE_STORAGE_KEY = 'anime-db:title-language';
+
+export function readTitleLanguage(): TitleLanguage {
+  try { return globalThis.localStorage?.getItem(TITLE_LANGUAGE_STORAGE_KEY) === 'jp' ? 'jp' : 'en'; }
+  catch { return 'en'; }
+}
+
+/** Resolve old saved copies by exact catalog ID, without rewriting their identity. */
+export function resolveAnimeTitles(song: TitleSource, catalog: ReadonlyMap<string, AnimeTitleMetadata>): TitleSource {
+  const metadata = catalog.get(String(song.source_song_id ?? song.id));
+  if (!metadata) return song;
+  return {
+    ...song,
+    anime_name_english: song.anime_name_english?.trim() ? song.anime_name_english : metadata.anime_name_english,
+    anime_name_romaji: song.anime_name_romaji?.trim() ? song.anime_name_romaji : metadata.anime_name_romaji,
+    anime_alt_names: [...(song.anime_alt_names ?? []), ...(metadata.anime_alt_names ?? [])],
+  };
+}
 
 /** Preserve valid optional metadata verbatim; normalization belongs to matching only. */
 export function copyAnimeTitleMetadata(value: unknown): AnimeTitleMetadata {
@@ -25,8 +44,11 @@ export function titlesFromAnisongDb(value: Record<string, unknown>): AnimeTitleM
   });
 }
 
-export function getAnimeDisplayTitle(song: TitleSource): string {
-  return [song.anime_name_romaji, song.anime_name_english, song.anime_name]
+export function getAnimeDisplayTitle(song: TitleSource, language: TitleLanguage = 'jp'): string {
+  const preferred = language === 'en'
+    ? [song.anime_name_english, song.anime_name_romaji]
+    : [song.anime_name_romaji, song.anime_name_english];
+  return [...preferred, song.anime_name]
     .find((title) => typeof title === 'string' && title.trim().length > 0) ?? 'Unknown Anime';
 }
 

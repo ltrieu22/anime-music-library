@@ -1,6 +1,7 @@
 import React from 'react';
 import { Music, Plus, Database, Disc3, Globe, StickyNote } from 'lucide-react';
 import { AnimeSongEntry, DatabaseMode } from '../types';
+import { useTitleLanguage } from '../context/TitleLanguageContext';
 
 interface HeaderProps {
   entries: AnimeSongEntry[];
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   noteCount = 0,
 }) => {
   const [imgHasError, setImgHasError] = React.useState(false);
+  const { language, setLanguage, storageError } = useTitleLanguage();
 
   // Base for static assets (relative, so GitHub Pages repo subpath works)
   const rawBase = (import.meta as any).env?.BASE_URL || './';
@@ -115,6 +117,22 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto">
+          <div className="flex flex-col items-end gap-1">
+            <div role="group" aria-label="Anime title language" className="flex items-center rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
+              {(['en', 'jp'] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={value === 'en' ? 'English anime titles' : 'Japanese romaji anime titles'}
+                  aria-pressed={language === value}
+                  title={value === 'en' ? 'English anime titles' : 'Japanese titles in romaji (Latin letters)'}
+                  onClick={() => setLanguage(value)}
+                  className={`min-h-11 min-w-11 rounded-md text-xs font-semibold cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-emerald-400 ${language === value ? 'bg-emerald-500 text-neutral-950' : 'text-neutral-400 hover:text-white'}`}
+                >{value.toUpperCase()}</button>
+              ))}
+            </div>
+            {storageError && <span role="status" className="text-xs text-amber-300">Title preference could not be saved.</span>}
+          </div>
           <button
             id="data-mgmt-btn"
             type="button"

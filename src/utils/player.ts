@@ -1,5 +1,6 @@
 import { AnimeSongEntry, AnimeSongItem, NoteSongSnapshot } from '../types';
 import { SongTrack } from '../types/player';
+import { copyAnimeTitleMetadata } from '../services/animeTitles';
 
 export function toSongTrack(
   song: AnimeSongEntry | AnimeSongItem | NoteSongSnapshot,
@@ -10,9 +11,15 @@ export function toSongTrack(
   if (!mediaUrl) return null;
 
   return {
-    // A saved copy and its catalog original belong to different playback contexts.
+    // Distinguish a saved copy from its catalog original; the queue assigns occurrence IDs.
     id: `${source}:${song.id}`,
     animeTitle: song.anime_name,
+    animeTitles: {
+      ...copyAnimeTitleMetadata(song),
+      anime_name: song.anime_name,
+      id: song.id,
+      source_song_id: 'source_song_id' in song ? song.source_song_id : undefined,
+    },
     songName: song.song_name || undefined,
     artist: song.artist || undefined,
     type: song.theme_type || undefined,

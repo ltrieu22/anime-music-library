@@ -1,3 +1,4 @@
+import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Calendar, Save, StickyNote, Trash2, User, X } from 'lucide-react';
 import {
@@ -27,6 +28,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
   onSave,
   onClear,
 }) => {
+  const { displayTitle } = useTitleLanguage();
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -192,7 +194,7 @@ export const NoteModal: React.FC<NoteModalProps> = ({
 
         <form onSubmit={handleSave} className="p-5 sm:p-6 space-y-4">
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 px-4 py-3">
-            <p className="text-sm font-semibold text-neutral-100 truncate">{song.anime_name}</p>
+            <p className="text-sm font-semibold text-neutral-100 truncate">{displayTitle(song)}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-400">
               {song.artist && (
                 <span className="inline-flex items-center gap-1.5">

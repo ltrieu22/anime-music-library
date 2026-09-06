@@ -6,6 +6,7 @@ import { Star, Image as ImageIcon } from 'lucide-react';
 
 interface AnimeHoverCardProps {
   animeName: string;
+  displayName: string;
   anilistId?: number | null;
   children: React.ReactNode;
   className?: string;
@@ -23,6 +24,7 @@ const detailsCache = new Map<string, AnimeDetails | null>();
 
 export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
   animeName,
+  displayName,
   anilistId,
   children,
   className = '',
@@ -34,6 +36,8 @@ export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [coords, setCoords] = useState<PositionCoords | null>(null);
+  const alternateTitle = [details?.english, details?.romaji]
+    .find((title) => title?.trim() && title !== displayName);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -158,7 +162,7 @@ export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
                 <>
                   <img
                     src={details.coverImage}
-                    alt={details.anime || animeName}
+                    alt={displayName}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                     loading="eager"
@@ -181,11 +185,11 @@ export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
             {/* Anime Title & Vintage */}
             <div className="pt-2 px-0.5">
               <h4 className="text-xs font-bold text-neutral-100 line-clamp-1 leading-snug">
-                {details?.romaji || details?.anime || animeName}
+                {displayName}
               </h4>
-              {details?.english && details.english !== (details.romaji || details.anime) && (
+              {alternateTitle && (
                 <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
-                  {details.english}
+                  {alternateTitle}
                 </p>
               )}
               {details?.year && (

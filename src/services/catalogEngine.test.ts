@@ -25,7 +25,7 @@ before(async () => {
 });
 
 test('bundled Heike search returns only the two direct songs', async () => {
-  for (const q of ['Heike', '  HEIKE  ', 'heike story']) {
+  for (const q of ['Heike', '  HEIKE  ', 'heike story', 'Heike Monogatari', 'The Heike Story']) {
     const result = await searchStaticCatalog({ q });
     assert.equal(result.total, 2, q);
     assert.equal(result.hasMore, false);
@@ -39,14 +39,14 @@ test('IKE expands to SPYAIR and SPYAIR remains directly searchable', async () =>
   for (const q of ['IKE', 'SPYAIR']) {
     const result = await searchStaticCatalog({ q, limit: 500 });
     assert.ok(spyairSongs.every(createCatalogQueryMatcher(q, aliases)), q);
-    const directMatches = catalog.filter((song) => `${song.anime_name} ${song.artist} ${song.song_name}`.toLowerCase().includes(q.toLowerCase()));
+    const directMatches = catalog.filter((song) => `${[song.anime_name, song.anime_name_english, song.anime_name_romaji, ...(song.anime_alt_names ?? [])].join(' ')} ${song.artist} ${song.song_name}`.toLowerCase().includes(q.toLowerCase()));
     assert.ok(result.total >= new Set(ids([...directMatches, ...spyairSongs])).size, q);
     if (q === 'IKE') assert.equal(result.total, new Set(ids([...directMatches, ...spyairSongs])).size);
   }
 });
 
 test('partial anime and song terms keep direct substring matching', async () => {
-  const expected = catalog.filter((song) => `${song.anime_name} ${song.artist} ${song.song_name}`.toLowerCase().includes('heik'));
+  const expected = catalog.filter((song) => `${[song.anime_name, song.anime_name_english, song.anime_name_romaji, ...(song.anime_alt_names ?? [])].join(' ')} ${song.artist} ${song.song_name}`.toLowerCase().includes('heik'));
   assert.deepEqual(ids((await searchStaticCatalog({ q: 'heik' })).data), ids(expected));
 });
 

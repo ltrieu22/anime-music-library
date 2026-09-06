@@ -1,3 +1,4 @@
+import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import type { AnimeSongEntry } from '../types';
@@ -9,6 +10,7 @@ interface RemoveSongModalProps {
 }
 
 export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalProps) {
+  const { displayTitle } = useTitleLanguage();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const pendingRef = useRef(false);
@@ -103,7 +105,7 @@ export function RemoveSongModal({ entry, onClose, onRemove }: RemoveSongModalPro
       <div className="space-y-4 p-5">
         <div id="remove-song-details" className="space-y-1 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 break-words">
           <p className="text-sm font-semibold text-white">{entry.song_name || 'Untitled song'}</p>
-          <p className="text-sm text-neutral-300">{entry.anime_name}</p>
+          <p className="text-sm text-neutral-300">{displayTitle(entry)}</p>
           {entry.artist && <p className="text-xs text-neutral-400">{entry.artist}</p>}
           <p className="text-xs font-mono text-neutral-500">
             #{entry.id}{entry.theme_type ? ` · ${entry.theme_type}` : ''}{entry.anime_year ? ` · ${entry.anime_year}` : ''}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { SongTable } from './components/SongTable';
@@ -103,6 +104,7 @@ function sortSongItems<T extends NoteableSong>(
 
 function MainApp() {
   const { closePlayer } = usePlayer();
+  const { searchTitles, displayTitle } = useTitleLanguage();
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
   const [mode, setMode] = useState<DatabaseMode>('anisongdb');
   const isCatalogMode = mode === 'anisongdb' || mode === 'animethemes';
@@ -396,7 +398,7 @@ function MainApp() {
     const filtered = collectionEntries.filter((item) => {
       const personalNote = findNoteForSong(notes, item);
       const matchesSearch = matchesSearchText(
-        [item.anime_name, item.artist, item.song_name, item.theme_type, personalNote?.text],
+        [...searchTitles(item), item.artist, item.song_name, item.theme_type, personalNote?.text],
         q
       );
 
@@ -422,7 +424,7 @@ function MainApp() {
       const cmp = collator.compare(String(valA), String(valB));
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [collectionEntries, notes, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
+  }, [searchTitles, collectionEntries, notes, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
 
   // Map collection items to SongTrack format for persistent Spotify-style audio/video playback
   const collectionTracks = useMemo<SongTrack[]>(() => {
@@ -476,7 +478,7 @@ function MainApp() {
   const handleEditSave = async (id: number, updatedFields: Partial<AnimeSongEntry>) => {
     const updated = await updateEntry(id, updatedFields);
     setCollectionEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
-    showToast(`Updated "${updated.anime_name}"`);
+    showToast(`Updated "${displayTitle(updated)}"`);
   };
 
   const handleDelete = async (id: number) => {
@@ -550,14 +552,14 @@ function MainApp() {
       const year = Number(song.anime_year);
       const matchesYear = !year || (year >= selectedMinYear && year <= selectedMaxYear);
       const matchesQuery = matchesSearchText(
-        [song.anime_name, song.artist, song.song_name, song.theme_type, note.text],
+        [...searchTitles(song), song.artist, song.song_name, song.theme_type, note.text],
         debouncedSearch
       );
       return matchesYear && matchesQuery;
     });
 
     return sortSongItems(filtered.map((note) => note.song), sortKey, sortOrder);
-  }, [noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
+  }, [searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
 
   // Match note contents locally and merge them with the bundled catalog results.
   const catalogNoteMatches = useMemo(() => {
@@ -576,12 +578,12 @@ function MainApp() {
         if (themeTypeFilter === 'IN' && !(theme.startsWith('IN') || theme.includes('INSERT'))) return false;
 
         return matchesSearchText(
-          [song.anime_name, song.artist, song.song_name, song.theme_type, note.text],
+          [...searchTitles(song), song.artist, song.song_name, song.theme_type, note.text],
           debouncedSearch
         );
       })
       .map((note) => note.song as AnimeSongItem);
-  }, [noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, themeTypeFilter]);
+  }, [searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, themeTypeFilter]);
 
   const mergedCatalogSongs = useMemo(() => {
     const merged = new Map<string, AnimeSongItem>();
@@ -788,8 +790,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <PlayerProvider>
-      <MainApp />
-    </PlayerProvider>
+    <TitleLanguageProvider>
+      <PlayerProvider>
+        <MainApp />
+      </PlayerProvider>
+    </TitleLanguageProvider>
   );
 }

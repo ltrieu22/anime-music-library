@@ -1,3 +1,4 @@
+import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React from 'react';
 import {
   ArrowUpDown,
@@ -22,6 +23,7 @@ import { AnimeHoverCard } from './AnimeHoverCard';
 import { usePlayer } from '../context/PlayerContext';
 import { toSongTrack } from '../utils/player';
 import { ThemeBadge } from './ThemeBadge';
+import { AddToQueueButton } from './player/AddToQueueButton';
 
 interface SongTableProps {
   entries: (AnimeSongEntry | AnimeSongItem)[];
@@ -90,8 +92,9 @@ export const SongTable: React.FC<SongTableProps> = ({
   tracksMap,
   allTracks,
 }) => {
+  const { displayTitle } = useTitleLanguage();
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
+  const { currentTrack, queueSource, isPlaying, playTrack, togglePlay } = usePlayer();
 
   // Safe highlight helper
   const highlightText = (text: string | number | undefined, query: string) => {
@@ -138,11 +141,17 @@ export const SongTable: React.FC<SongTableProps> = ({
     <ThemeBadge themeType={themeType} />
   );
 
-  const renderSongName = (item: AnimeSongEntry | AnimeSongItem) => {
-    const playerTrack = tracksMap
+  const getPlayerTrack = (item: AnimeSongEntry | AnimeSongItem) => tracksMap
       ? tracksMap.get(`collection:${item.id}`)
       : toSongTrack(item, isNotesMode ? 'notes' : 'catalog');
-    const songName = item.song_name || (playerTrack ? item.anime_name : 'No song name');
+
+  const renderQueueAction = (item: AnimeSongEntry | AnimeSongItem) => (
+    <AddToQueueButton track={getPlayerTrack(item)} songName={item.song_name || displayTitle(item)} />
+  );
+
+  const renderSongName = (item: AnimeSongEntry | AnimeSongItem) => {
+    const playerTrack = getPlayerTrack(item);
+    const songName = item.song_name || (playerTrack ? displayTitle(item) : 'No song name');
 
     if (!playerTrack) {
       return <span className="text-emerald-400 font-medium">{highlightText(songName, searchQuery)}</span>;
@@ -152,7 +161,7 @@ export const SongTable: React.FC<SongTableProps> = ({
       <button
         type="button"
         onClick={() => {
-          if (currentTrack && String(currentTrack.id) === String(playerTrack.id)) {
+          if (queueSource !== 'manual' && currentTrack && String(currentTrack.id) === String(playerTrack.id)) {
             if (!isPlaying) togglePlay();
           } else {
             playTrack(playerTrack, allTracks);
@@ -288,6 +297,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                   <td className="py-3 px-4 font-medium text-neutral-100">
                     <AnimeHoverCard
                       animeName={item.anime_name}
+                      displayName={displayTitle(item)}
                       anilistId={(item as any).anilist_id}
                     >
                       <a
@@ -298,7 +308,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                         className="text-neutral-100 hover:text-emerald-300 underline decoration-dotted decoration-neutral-600 hover:decoration-emerald-400 transition-colors cursor-pointer"
                         title="View on AniList"
                       >
-                        {highlightText(item.anime_name, searchQuery)}
+                        {highlightText(displayTitle(item), searchQuery)}
                       </a>
                     </AnimeHoverCard>
                   </td>
@@ -361,6 +371,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                   {/* Actions column */}
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                      {renderQueueAction(item)}
                       <button
                         type="button"
                         onClick={() => onEditNote(item)}
@@ -370,7 +381,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                             : 'text-neutral-400 hover:text-amber-300 hover:bg-neutral-800'
                         }`}
                         title={hasNote ? 'Edit personal note' : 'Add personal note'}
-                        aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || item.anime_name}`}
+                        aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || displayTitle(item)}`}
                       >
                         <StickyNote className={`w-3.5 h-3.5 ${hasNote ? 'fill-amber-300/20' : ''}`} />
                       </button>
@@ -379,7 +390,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                         <button
                           onClick={() => onSaveToCollection && onSaveToCollection(item as AnimeSongItem)}
                           disabled={isSaved}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          className={`inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                             isSaved
                               ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 cursor-default'
                               : 'bg-neutral-800 hover:bg-emerald-600 text-neutral-200 hover:text-white border border-neutral-700 cursor-pointer shadow-sm'
@@ -387,12 +398,12 @@ export const SongTable: React.FC<SongTableProps> = ({
                         >
                           {isSaved ? (
                             <>
-                              <Check className="w-3 h-3 text-emerald-400" />
+                              <Check className="w-3 h-3 shrink-0 text-emerald-400" />
                               <span>Saved</span>
                             </>
                           ) : (
                             <>
-                              <BookmarkPlus className="w-3 h-3" />
+                              <BookmarkPlus className="w-3 h-3 shrink-0" />
                               <span>+ Save</span>
                             </>
                           )}
@@ -414,7 +425,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                               onClick={() => onDelete(item.id as number)}
                               className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors cursor-pointer"
                               title="Remove from My Collection"
-                              aria-label={`Remove ${item.song_name || item.anime_name} from My Collection`}
+                              aria-label={`Remove ${item.song_name || displayTitle(item)} from My Collection`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -474,6 +485,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                   </span>
                   <AnimeHoverCard
                     animeName={item.anime_name}
+                    displayName={displayTitle(item)}
                     anilistId={(item as any).anilist_id}
                   >
                     <a
@@ -484,7 +496,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                       className="font-semibold text-neutral-100 text-sm hover:text-emerald-400 underline decoration-dotted cursor-pointer"
                       title="View on AniList"
                     >
-                      {highlightText(item.anime_name, searchQuery)}
+                      {highlightText(displayTitle(item), searchQuery)}
                     </a>
                   </AnimeHoverCard>
                 </div>
@@ -533,6 +545,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                 </div>
 
                 <div className="flex flex-shrink-0 items-center gap-2">
+                  {renderQueueAction(item)}
                   <button
                     type="button"
                     onClick={() => onEditNote(item)}
@@ -542,7 +555,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                         : 'text-neutral-400 hover:text-amber-300 bg-neutral-800'
                     }`}
                     title={hasNote ? 'Edit personal note' : 'Add personal note'}
-                    aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || item.anime_name}`}
+                    aria-label={`${hasNote ? 'Edit' : 'Add'} personal note for ${item.song_name || displayTitle(item)}`}
                   >
                     <StickyNote className={`w-3.5 h-3.5 ${hasNote ? 'fill-amber-300/20' : ''}`} />
                   </button>
@@ -550,7 +563,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                     <button
                       onClick={() => onSaveToCollection && onSaveToCollection(item as AnimeSongItem)}
                       disabled={isSaved}
-                      className={`px-2 py-1 rounded text-xs font-medium ${
+                      className={`shrink-0 whitespace-nowrap px-2 py-1 rounded text-xs font-medium ${
                         isSaved
                           ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
                           : 'bg-neutral-800 hover:bg-emerald-600 text-white'
@@ -571,7 +584,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                       {onDelete && typeof item.id === 'number' && (
                         <button
                           onClick={() => onDelete(item.id as number)}
-                          aria-label={`Remove ${item.song_name || item.anime_name} from My Collection`}
+                          aria-label={`Remove ${item.song_name || displayTitle(item)} from My Collection`}
                           className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-neutral-400 hover:text-rose-400 bg-neutral-800"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

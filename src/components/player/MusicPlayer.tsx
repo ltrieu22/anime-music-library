@@ -1,3 +1,4 @@
+import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
@@ -12,11 +13,13 @@ import {
   Minimize2,
   X,
   Disc3,
+  ListMusic,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { fetchAnimeCoverDetails } from '../../services/api';
 import { getAniListAnimeUrl } from '../../utils/anilist';
 import { ThemeBadge } from '../ThemeBadge';
+import { QueuePanel } from './QueuePanel';
 
 const PIP_MIN_WIDTH = 280;
 const PIP_MAX_WIDTH = 720;
@@ -138,6 +141,7 @@ function formatTime(seconds: number): string {
 export const MusicPlayer: React.FC = () => {
   const {
     currentTrack,
+    upcomingQueueItems,
     canSkipNext,
     isPlaying,
     isVideoVisible,
@@ -156,8 +160,15 @@ export const MusicPlayer: React.FC = () => {
     closePlayer,
   } = usePlayer();
 
+  const { displayTitle } = useTitleLanguage();
+  const animeDisplayTitle = currentTrack ? displayTitle(currentTrack.animeTitles ?? { anime_name: currentTrack.animeTitle }) : 'Current track';
+
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  useEffect(() => {
+    if (!currentTrack) setIsQueueOpen(false);
+  }, [currentTrack]);
   const [pipLayout, setPipLayout] = useState<PipLayout>(getInitialPipLayout);
   const [pipInteraction, setPipInteraction] = useState<'drag' | 'resize' | null>(null);
   const [pipDragTilt, setPipDragTilt] = useState(0);
@@ -510,6 +521,7 @@ export const MusicPlayer: React.FC = () => {
 
   return (
     <>
+      {isQueueOpen && currentTrack && <QueuePanel onClose={() => setIsQueueOpen(false)} />}
       {/*
         SINGLE <video> Element Architecture:
         The video tag is ALWAYS mounted in this container.
@@ -597,7 +609,7 @@ export const MusicPlayer: React.FC = () => {
                     className="font-semibold text-neutral-100 truncate underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
                     title="View on AniList"
                   >
-                    {currentTrack.animeTitle}
+                    {animeDisplayTitle}
                   </a>
                   {currentTrack.type && (
                     <ThemeBadge themeType={currentTrack.type} size="compact" />
@@ -645,7 +657,7 @@ export const MusicPlayer: React.FC = () => {
             playsInline
             crossOrigin="anonymous"
             className="w-full h-full object-contain"
-            aria-label={`${currentTrack?.animeTitle || 'Current track'} video player`}
+            aria-label={`${animeDisplayTitle} video player`}
           />
 
           {!isFullscreen && (
@@ -671,12 +683,12 @@ export const MusicPlayer: React.FC = () => {
           className="fixed bottom-0 left-0 right-0 h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl select-none"
         >
           {/* LEFT: Anime Poster, Title, and Theme Info */}
-          <div className="flex items-center gap-3 min-w-0 w-[28%] sm:w-[30%]">
-            <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700/60 flex-shrink-0 flex items-center justify-center shadow-inner">
+          <div className="flex items-center gap-3 min-w-0 w-[24%] sm:w-[30%]">
+            <div className="relative hidden sm:flex w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700/60 flex-shrink-0 items-center justify-center shadow-inner">
               {posterUrl ? (
                 <img
                   src={posterUrl}
-                  alt={currentTrack.animeTitle}
+                  alt={animeDisplayTitle}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                   onError={() => setPosterUrl(null)}
@@ -693,12 +705,12 @@ export const MusicPlayer: React.FC = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs sm:text-sm font-semibold text-neutral-100 truncate hover:text-emerald-400 transition-colors"
-                  title={currentTrack.animeTitle}
+                  title={animeDisplayTitle}
                 >
-                  {currentTrack.animeTitle}
+                  {animeDisplayTitle}
                 </a>
                 {currentTrack.type && (
-                  <ThemeBadge themeType={currentTrack.type} size="compact" />
+                  <span className="hidden sm:block"><ThemeBadge themeType={currentTrack.type} size="compact" /></span>
                 )}
               </div>
               <p
@@ -716,9 +728,9 @@ export const MusicPlayer: React.FC = () => {
           </div>
 
           {/* CENTER: Prev, Play/Pause, Next controls and Clickable Progress Bar */}
-          <div className="flex flex-col items-center justify-center flex-1 max-w-xl px-2">
+          <div className="flex min-w-24 sm:min-w-0 flex-col items-center justify-center flex-1 max-w-xl sm:px-2">
             {/* Playback Controls */}
-            <div className="flex items-center gap-3 sm:gap-4 mb-1.5">
+            <div className="flex items-center gap-1 sm:gap-4 mb-1.5">
               <button
                 type="button"
                 onClick={prevTrack}
@@ -785,12 +797,24 @@ export const MusicPlayer: React.FC = () => {
           </div>
 
           {/* RIGHT: Show Video / Video ON Toggle, Mute Button, Volume Slider, Dismiss */}
-          <div className="flex items-center justify-end gap-2 sm:gap-3 w-[28%] sm:w-[30%]">
+          <div className="flex shrink-0 items-center justify-end gap-0 sm:gap-2 sm:w-[30%]">
+            <button
+              type="button"
+              onClick={() => setIsQueueOpen(value => !value)}
+              aria-label={isQueueOpen ? 'Hide queue' : 'Show queue'}
+              aria-expanded={isQueueOpen}
+              aria-controls="playback-queue"
+              title={`Show queue (${upcomingQueueItems.length} upcoming)`}
+              className={`relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-emerald-300 ${isQueueOpen ? 'bg-emerald-950/60 text-emerald-300' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
+            >
+              <ListMusic aria-hidden="true" className="h-4 w-4" />
+              {upcomingQueueItems.length > 0 && <span aria-hidden="true" className="absolute right-0 top-0 rounded-full bg-emerald-400 px-1 text-[9px] font-semibold text-neutral-950">{upcomingQueueItems.length > 99 ? '99+' : upcomingQueueItems.length}</span>}
+            </button>
             {/* Show Video / Video ON Toggle */}
             <button
               type="button"
               onClick={() => toggleVideo()}
-              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+              className={`flex min-h-11 min-w-11 justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                 isVideoVisible
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                   : 'bg-neutral-800 text-neutral-300 border-neutral-700/80 hover:bg-neutral-700 hover:text-white'
@@ -840,7 +864,7 @@ export const MusicPlayer: React.FC = () => {
             <button
               type="button"
               onClick={closePlayer}
-              className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
               title="Close Player"
               aria-label="Close Player"
             >
