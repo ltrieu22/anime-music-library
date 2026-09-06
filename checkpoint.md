@@ -8,7 +8,7 @@ This document records completed work and the next features discussed with the us
 
 The user wants work split to accommodate their Codex five-hour usage window. The batches below are deliberately small and independently resumable. Scope estimates are engineering estimates, not guarantees about Codex usage or how much work a usage window allows. Start with one batch per session and reserve room for verification and a handoff. Do not combine all batches into one task.
 
-**Batch 8 is complete. Next eligible batch: 9 — collection library and playlist creation, not started. Batches 1, 2, 4, 5, 6, 7, and 8 are complete.**
+**Batch 12 is complete. Next eligible batch: 9 — collection library and playlist creation, not started. Batches 1, 2, 4, 5, 6, 7, 8, and 12 are complete.**
 
 The additional requests reviewed on 2026-09-05 are planned as batches 12–26 below, with dependencies, difficulty, and completion criteria. This update is planning only; none of those features has been implemented. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
 
@@ -231,6 +231,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 
 - Add `cursor-pointer` to existing clickable artist buttons on desktop and mobile layouts; preserve exact artist-ID behavior and keyboard focus styling. Leave plain text non-interactive.
 - **Done when:** hover shows the same pointer convention as clickable song/anime names, and clicking or keyboard activation still selects the correct artist. No new dependency.
+- **Complete on 2026-09-06:** desktop and mobile exact-artist buttons now use the pointer cursor while non-interactive collection/note artist text remains unchanged. Native lazy loading and asynchronous decoding were also added to offscreen Add Song search-result covers; full row/image virtualization was intentionally omitted because catalog rows are text-only and hover/player/header images mount only when needed or are immediately visible. Validation passed with TypeScript, all 38 tests, the production build, desktop pointer/click and keyboard activation checks, mobile pointer/click checks, and a clean browser console.
 
 ### Batch 13 — bottom-player entrance animation
 

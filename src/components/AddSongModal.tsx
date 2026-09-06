@@ -219,8 +219,12 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
                         <img
                           src={anime.coverImage}
                           alt={anime.name}
+                          width={64}
+                          height={96}
                           className="w-16 h-24 object-cover rounded-lg border border-neutral-700/60 flex-shrink-0"
                           referrerPolicy="no-referrer"
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <div className="w-16 h-24 rounded-lg bg-neutral-800 border border-neutral-700/60 flex items-center justify-center text-neutral-600 flex-shrink-0">

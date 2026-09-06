@@ -340,7 +340,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onArtistSelect(item as AnimeSongItem)}
-                          className="group/artist inline-flex items-center gap-1.5 text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
+                          className="group/artist inline-flex cursor-pointer items-center gap-1.5 text-left text-neutral-300 underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300 hover:decoration-emerald-400"
                           title={`Find every song connected to ${item.artist} using the artist ID`}
                           aria-label={`Search all songs by ${item.artist}`}
                         >
@@ -533,7 +533,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                     <button
                       type="button"
                       onClick={() => onArtistSelect(item as AnimeSongItem)}
-                      className="truncate text-left underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300"
+                      className="cursor-pointer truncate text-left underline decoration-dotted decoration-neutral-600 transition-colors hover:text-emerald-300"
                       title={`Find every song connected to ${item.artist} using the artist ID`}
                       aria-label={`Search all songs by ${item.artist}`}
                     >
