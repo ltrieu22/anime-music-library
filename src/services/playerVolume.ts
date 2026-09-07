@@ -9,6 +9,7 @@
 export const PLAYER_VOLUME_STORAGE_KEY = 'anime-db:player-volume-v1';
 export const PLAYER_VOLUME_SCHEMA_VERSION = 1;
 export const PLAYER_VOLUME_DEFAULT = 0.4;
+export const PLAYER_VOLUME_WHEEL_STEP = 0.02;
 
 interface StoredPlayerVolume {
   version: number;
@@ -19,6 +20,17 @@ interface StoredPlayerVolume {
 export function sanitizePlayerVolume(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.min(1, Math.max(0, value));
+}
+
+/** Apply one 2% volume step for a vertical wheel event. */
+export function adjustPlayerVolumeForWheel(volume: number, deltaY: number): number {
+  const currentVolume = sanitizePlayerVolume(volume) ?? 0;
+  if (!Number.isFinite(deltaY) || deltaY === 0) return currentVolume;
+
+  const direction = deltaY < 0 ? 1 : -1;
+  const adjustedVolume = currentVolume + direction * PLAYER_VOLUME_WHEEL_STEP;
+  // Round away floating-point noise so every event remains an exact 2% step.
+  return sanitizePlayerVolume(Math.round(adjustedVolume * 100) / 100) ?? currentVolume;
 }
 
 /**

@@ -4,10 +4,23 @@ import {
   PLAYER_VOLUME_DEFAULT,
   PLAYER_VOLUME_SCHEMA_VERSION,
   PLAYER_VOLUME_STORAGE_KEY,
+  PLAYER_VOLUME_WHEEL_STEP,
+  adjustPlayerVolumeForWheel,
   readStoredPlayerVolume,
   sanitizePlayerVolume,
   writeStoredPlayerVolume,
 } from './playerVolume';
+
+test('wheel adjustment changes volume by 2% per event and clamps at the limits', () => {
+  assert.equal(PLAYER_VOLUME_WHEEL_STEP, 0.02);
+  assert.equal(adjustPlayerVolumeForWheel(0.4, -1), 0.42);
+  assert.equal(adjustPlayerVolumeForWheel(0.4, -120), 0.42);
+  assert.equal(adjustPlayerVolumeForWheel(0.4, 1), 0.38);
+  assert.equal(adjustPlayerVolumeForWheel(0.99, -1), 1);
+  assert.equal(adjustPlayerVolumeForWheel(0.01, 1), 0);
+  assert.equal(adjustPlayerVolumeForWheel(0.4, 0), 0.4);
+  assert.equal(adjustPlayerVolumeForWheel(0.4, Number.NaN), 0.4);
+});
 
 interface MemoryStorageOptions {
   failSet?: boolean;

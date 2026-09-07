@@ -16,6 +16,7 @@ The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 be
 
 - My Collection defaults to `#` ascending. Entries receive increasing local IDs when saved, so the highest number is the most recently saved remaining entry. Filtering does not renumber entries. Sorting is independent for each view; resetting collection filters restores this default.
 - Collection and catalog song titles play through the existing bottom player. Notes with media use it too. Separate row play buttons and the old `VideoModal.tsx` were removed.
+- Hovering the bottom player's enlarged rectangular volume area and scrolling adjusts volume in 2% steps without scrolling the page; scrolling up raises volume and scrolling down lowers it. A percentage readout appears immediately while wheel or slider adjustments are being made.
 - Clicking a collection song supplies the visible collection playlist. Clicking a catalog song replaces it with that one song; Next is disabled and playback stops when the song ends. Play Collection starts collection playback again.
 - Closing the player clears its queue. Importing/resetting collection data also closes the player, preventing playback of an obsolete queue.
 - Audio-only URLs are supported by song conversion and saved collection imports/exports.

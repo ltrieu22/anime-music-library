@@ -1,5 +1,5 @@
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { fetchAnimeCoverDetails } from '../../services/api';
+import { adjustPlayerVolumeForWheel } from '../../services/playerVolume';
 import { getAniListAnimeUrl } from '../../utils/anilist';
 import { ThemeBadge } from '../ThemeBadge';
 import { QueuePanel } from './QueuePanel';
@@ -166,6 +167,7 @@ export const MusicPlayer: React.FC = () => {
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isVolumeReadoutVisible, setIsVolumeReadoutVisible] = useState(false);
   useEffect(() => {
     if (!currentTrack) setIsQueueOpen(false);
   }, [currentTrack]);
@@ -174,10 +176,51 @@ export const MusicPlayer: React.FC = () => {
   const [pipDragTilt, setPipDragTilt] = useState(0);
   const pipContainerRef = useRef<HTMLDivElement>(null);
   const playerBarRef = useRef<HTMLDivElement>(null);
+  const volumeWheelAreaRef = useRef<HTMLDivElement>(null);
+  const wheelVolumeRef = useRef(isMuted ? 0 : volume);
+  wheelVolumeRef.current = isMuted ? 0 : volume;
+  const volumeReadoutTimeoutRef = useRef<number | null>(null);
   const pointerInteractionRef = useRef<PipPointerInteraction | null>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const pendingPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const cleanupPointerInteractionRef = useRef<(() => void) | null>(null);
+
+  const revealVolumeReadout = useCallback(() => {
+    setIsVolumeReadoutVisible(true);
+    if (volumeReadoutTimeoutRef.current !== null) {
+      window.clearTimeout(volumeReadoutTimeoutRef.current);
+    }
+    volumeReadoutTimeoutRef.current = window.setTimeout(() => {
+      setIsVolumeReadoutVisible(false);
+      volumeReadoutTimeoutRef.current = null;
+    }, 1000);
+  }, []);
+
+  useEffect(() => () => {
+    if (volumeReadoutTimeoutRef.current !== null) {
+      window.clearTimeout(volumeReadoutTimeoutRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const wheelArea = volumeWheelAreaRef.current;
+    if (!wheelArea) return;
+
+    const handleVolumeWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const nextVolume = adjustPlayerVolumeForWheel(wheelVolumeRef.current, event.deltaY);
+      wheelVolumeRef.current = nextVolume;
+      setVolume(nextVolume);
+      revealVolumeReadout();
+    };
+
+    // The explicit non-passive listener keeps the page fixed while the pointer
+    // is anywhere inside the larger rectangular volume area.
+    wheelArea.addEventListener('wheel', handleVolumeWheel, { passive: false });
+    return () => wheelArea.removeEventListener('wheel', handleVolumeWheel);
+  }, [currentTrack, revealVolumeReadout, setVolume]);
 
   const getPipBottomBoundary = () => {
     // Translation changes the top during entrance, but not the measured height.
@@ -833,7 +876,7 @@ export const MusicPlayer: React.FC = () => {
             </button>
 
             {/* Volume and Mute Controls */}
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden md:flex items-center">
               <button
                 type="button"
                 onClick={toggleMute}
@@ -848,17 +891,35 @@ export const MusicPlayer: React.FC = () => {
                 )}
               </button>
 
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={isMuted ? 0 : volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-16 sm:w-20 h-1 bg-neutral-700 accent-emerald-500 rounded-lg cursor-pointer"
-                title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                aria-label="Volume slider"
-              />
+              <div
+                ref={volumeWheelAreaRef}
+                className="relative flex h-11 w-24 items-center rounded-lg pl-1 pr-2 transition-colors hover:bg-neutral-800/70"
+                title="Scroll to adjust volume by 2%"
+              >
+                {isVolumeReadoutVisible && (
+                  <output
+                    aria-live="polite"
+                    className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 -translate-y-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-[11px] font-medium tabular-nums text-neutral-100 shadow-lg"
+                  >
+                    {Math.round((isMuted ? 0 : volume) * 100)}%
+                  </output>
+                )}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={(event) => {
+                    const nextVolume = parseFloat(event.target.value);
+                    wheelVolumeRef.current = nextVolume;
+                    setVolume(nextVolume);
+                    revealVolumeReadout();
+                  }}
+                  className="h-1 w-full cursor-pointer rounded-lg bg-neutral-700 accent-emerald-500"
+                  aria-label="Volume slider"
+                />
+              </div>
             </div>
 
             {/* Close / Dismiss mini-player */}
