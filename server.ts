@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { createCatalogQueryMatcher } from './src/services/catalogSearch';
+import { searchCatalogResults } from './src/services/catalogResults';
 import type { AnimeTitleMetadata } from './src/types';
 import { copyAnimeTitleMetadata } from './src/services/animeTitles';
 
@@ -500,87 +500,18 @@ async function startServer() {
   loadArtistAliases();
 
   const handleLocalCatalog = async (req: express.Request, res: express.Response) => {
-    const q = String(req.query.q || '').trim().toLowerCase();
-    const yearMin = req.query.yearMin ? Number(req.query.yearMin) : null;
-    const yearMax = req.query.yearMax ? Number(req.query.yearMax) : null;
-    const themeType = String(req.query.themeType || 'all').toUpperCase(); // ALL, OP, ED, IN
-    const sortKey = String(req.query.sortKey || 'anime_year');
-    const sortOrder = String(req.query.sortOrder || 'desc').toLowerCase(); // 'asc' or 'desc'
-    const limit = Math.min(500, Math.max(10, Number(req.query.limit) || (q ? 250 : 80)));
-
     try {
-      let filtered = localCatalog.length > 0 ? localCatalog : loadLocalCatalog();
-
-      // Filter by search query (anime, artist, or song name) + artist group/member expansion
-      if (q) {
-        filtered = filtered.filter(createCatalogQueryMatcher(q, artistAliases));
-      }
-
-      // Filter by year range
-      if (yearMin !== null || yearMax !== null) {
-        filtered = filtered.filter((item) => {
-          const y = Number(item.anime_year);
-          if (!y) return true;
-          if (yearMin !== null && y < yearMin) return false;
-          if (yearMax !== null && y > yearMax) return false;
-          return true;
-        });
-      }
-
-      // Filter by theme type (Opening, Ending, Insert)
-      if (themeType && themeType !== 'ALL') {
-        filtered = filtered.filter((item) => {
-          const t = (item.theme_type || '').toUpperCase();
-          if (themeType === 'OP') return t.startsWith('OP') || t.includes('OPENING');
-          if (themeType === 'ED') return t.startsWith('ED') || t.includes('ENDING');
-          if (themeType === 'IN') return t.startsWith('IN') || t.includes('INSERT');
-          return true;
-        });
-      }
-
-      // Sort entire filtered dataset before slicing
-      const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-      filtered = [...filtered].sort((a, b) => {
-        let valA = (a as any)[sortKey];
-        let valB = (b as any)[sortKey];
-
-        if (sortKey === 'anime_year') {
-          const numA = Number(valA) || 0;
-          const numB = Number(valB) || 0;
-          if (numA !== numB) {
-            return sortOrder === 'asc' ? numA - numB : numB - numA;
-          }
-          return collator.compare(String(a.anime_name || ''), String(b.anime_name || ''));
-        }
-
-        if (sortKey === 'id') {
-          const numA = typeof valA === 'string' ? parseInt(valA.replace(/\D/g, ''), 10) : Number(valA);
-          const numB = typeof valB === 'string' ? parseInt(valB.replace(/\D/g, ''), 10) : Number(valB);
-          if (!isNaN(numA) && !isNaN(numB)) {
-            return sortOrder === 'asc' ? numA - numB : numB - numA;
-          }
-        }
-
-        if (valA === undefined || valA === null) return sortOrder === 'asc' ? 1 : -1;
-        if (valB === undefined || valB === null) return sortOrder === 'asc' ? -1 : 1;
-
-        if (typeof valA === 'number' && typeof valB === 'number') {
-          return sortOrder === 'asc' ? valA - valB : valB - valA;
-        }
-
-        const cmp = collator.compare(String(valA), String(valB));
-        return sortOrder === 'asc' ? cmp : -cmp;
+      const result = searchCatalogResults(localCatalog.length > 0 ? localCatalog : loadLocalCatalog(), artistAliases, {
+        q: String(req.query.q || ''),
+        yearMin: req.query.yearMin === undefined ? undefined : Number(req.query.yearMin),
+        yearMax: req.query.yearMax === undefined ? undefined : Number(req.query.yearMax),
+        themeType: String(req.query.themeType || 'ALL'),
+        sortKey: String(req.query.sortKey || 'anime_year'),
+        sortOrder: String(req.query.sortOrder || 'desc'),
+        limit: Number(req.query.limit),
+        offset: Number(req.query.offset),
       });
-
-      const total = filtered.length;
-      const paginated = filtered.slice(0, limit);
-
-      res.json({
-        data: paginated,
-        total,
-        hasMore: total > limit,
-        source: 'local',
-      });
+      res.json({ ...result, source: 'local' });
     } catch (err: any) {
       console.error('Local catalog query error:', err);
       res.status(500).json({ error: 'Failed to query catalog', message: err.message, data: [] });

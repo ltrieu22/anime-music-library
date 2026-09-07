@@ -1,4 +1,5 @@
 import type { AnimeTitleMetadata } from '../types';
+import { normalizeSearchText } from './searchText';
 
 export type TitleSource = AnimeTitleMetadata & { anime_name?: string; id?: string | number; source_song_id?: string | number };
 export type TitleLanguage = 'en' | 'jp';
@@ -58,7 +59,9 @@ export function getSearchableAnimeTitles(song: TitleSource): string[] {
   return [song.anime_name, song.anime_name_english, song.anime_name_romaji, ...(song.anime_alt_names ?? [])]
     .filter((title): title is string => {
       if (typeof title !== 'string') return false;
-      const key = title.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+      // Retain the existing compatibility-width deduplication, then apply the
+      // shared accent-insensitive search normalization.
+      const key = normalizeSearchText(title.normalize('NFKC'));
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;

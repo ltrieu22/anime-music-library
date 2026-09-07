@@ -10,6 +10,27 @@ const catalog: AnimeSongItem[] = readData('../../public/data/anime_catalog.json'
 const aliases: Record<string, string[]> = readData('../../public/data/artist_aliases.json');
 const ids = (songs: AnimeSongItem[]) => songs.map((song) => song.id).sort();
 
+test('all Gundam and over-500 IKE results are reachable exactly once in the static catalog', async () => {
+  for (const q of ['Gundam', 'IKE']) {
+    const expected = catalog.filter(createCatalogQueryMatcher(q, aliases));
+    const found: AnimeSongItem[] = [];
+    let offset = 0;
+    while (true) {
+      const result = await searchStaticCatalog({ q, limit: 100, offset, sortKey: 'anime_year', sortOrder: 'desc' });
+      assert.equal(result.total, expected.length);
+      assert.equal(result.offset, offset);
+      assert.ok(result.data.length <= 100);
+      found.push(...result.data);
+      if (!result.hasMore) break;
+      offset += 100;
+    }
+    assert.equal(found.length, expected.length);
+    assert.deepEqual(ids(found), ids(expected));
+    assert.equal(new Set(ids(found)).size, found.length);
+    if (q === 'IKE') assert.ok(found.length > 500);
+  }
+});
+
 before(async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
@@ -30,6 +51,24 @@ test('bundled Heike search returns only the two direct songs', async () => {
     assert.equal(result.total, 2, q);
     assert.equal(result.hasMore, false);
     assert.deepEqual(ids(result.data), ['song-34830', 'song-34831']);
+  }
+});
+
+test('accented, unaccented, mixed-case, and decomposed fhána searches agree', async () => {
+  const queries = ['fhána', 'fhana', '  FHANA  ', 'fha\u0301na'];
+  const results = await Promise.all(queries.map((q) => searchStaticCatalog({ q, limit: 500 })));
+  const expectedIds = ids(results[0].data);
+  assert.ok(expectedIds.length > 0);
+  for (const [index, result] of results.entries()) {
+    assert.equal(result.total, expectedIds.length, queries[index]);
+    assert.deepEqual(ids(result.data), expectedIds, queries[index]);
+  }
+
+  const serverAliases = readData('../../data/artist_aliases.json');
+  for (const aliasSource of [aliases, serverAliases]) {
+    for (const query of queries) {
+      assert.deepEqual(ids(catalog.filter(createCatalogQueryMatcher(query, aliasSource))), expectedIds, query);
+    }
   }
 });
 
@@ -119,6 +158,18 @@ test('expanded artist names use boundaries, including Unicode, and stay in the a
   const literal = createCatalogQueryMatcher('A+B', { 'a+b': ['Group (Live)'] });
   assert.equal(literal({ ...song, artist: 'Group (Live)' }), true);
   assert.equal(literal({ ...song, artist: 'Group Live' }), false);
+});
+
+test('alias keys and values fold Latin accents without weakening Unicode boundaries', () => {
+  const aliasesWithAccents = { 'fhána': ['Mánager'] };
+  const song = { anime_name: 'Example', song_name: 'Example', artist: 'Manager' };
+  assert.equal(createCatalogQueryMatcher('FHANA', aliasesWithAccents)(song), true);
+  assert.equal(createCatalogQueryMatcher('fha\u0301na', aliasesWithAccents)({ ...song, artist: 'Mánager' }), true);
+  assert.equal(createCatalogQueryMatcher('fhana', aliasesWithAccents)({ ...song, artist: '池Manager田' }), false);
+
+  const kanaSong = { ...song, artist: 'が' };
+  assert.equal(createCatalogQueryMatcher('か', {})(kanaSong), false);
+  assert.equal(createCatalogQueryMatcher('か\u3099', {})(kanaSong), true);
 });
 
 test('the shared matcher also works with the server aliases', () => {

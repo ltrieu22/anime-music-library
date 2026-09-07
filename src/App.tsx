@@ -33,6 +33,7 @@ import {
 } from './services/api';
 import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
 import { copyAnimeTitleMetadata } from './services/animeTitles';
+import { matchesSearchText } from './services/searchText';
 import { hydrateArtistCredits, searchSongsByArtistIds } from './services/anisongdbArtists';
 import {
   NOTES_STORAGE_KEY,
@@ -63,13 +64,7 @@ const DEFAULT_SORTS: Record<DatabaseMode, { key: SortKey; order: SortOrder }> = 
 
 const CATALOG_MIN_YEAR = 1924;
 const CATALOG_MAX_YEAR = 2026;
-
-function matchesSearchText(values: Array<unknown>, query: string): boolean {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return true;
-  const searchableText = values.map((value) => String(value ?? '').toLowerCase()).join(' ');
-  return terms.every((term) => searchableText.includes(term));
-}
+const CATALOG_PAGE_SIZE = 100;
 
 function sortSongItems<T extends NoteableSong>(
   items: T[],
@@ -122,7 +117,10 @@ function MainApp() {
   // AniSongDB live catalog state
   const [anisongdbSongs, setAnisongdbSongs] = useState<AnimeSongItem[]>([]);
   const [isLoadingAniSongDb, setIsLoadingAniSongDb] = useState(false);
-  const [aniSongDbTotal, setAniSongDbTotal] = useState(38821);
+  const [aniSongDbTotal, setAniSongDbTotal] = useState(0);
+  const [catalogPageRequest, setCatalogPageRequest] = useState({ key: '', page: 0 });
+  const [loadedCatalogKey, setLoadedCatalogKey] = useState('');
+  const [catalogOffset, setCatalogOffset] = useState(0);
 
   // Fallback catalog lookup map for collection songs missing video_url
   const [catalogLookupMap, setCatalogLookupMap] = useState<Map<string, AnimeSongItem>>(new Map());
@@ -212,110 +210,6 @@ function MainApp() {
     }, 200);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  // Track previous filter parameters to differentiate between filter changes vs pure sorting
-  const prevFiltersRef = useRef({
-    search: debouncedSearch,
-    artistIds: activeArtistFilter?.ids.join(',') || '',
-    minYear: selectedMinYear,
-    maxYear: selectedMaxYear,
-    theme: themeTypeFilter,
-    mode,
-  });
-  const hasLoadedInitialCatalogRef = useRef(false);
-  const artistFilterKey = activeArtistFilter?.ids.join(',') || '';
-
-  // Fetch AniSongDB live catalog songs whenever search, years, theme type, or sorting changes
-  useEffect(() => {
-    if (!isCatalogMode) return;
-
-    let isMounted = true;
-    const isInitial = !hasLoadedInitialCatalogRef.current;
-    const filterChanged =
-      isInitial ||
-      prevFiltersRef.current.search !== debouncedSearch ||
-      prevFiltersRef.current.artistIds !== artistFilterKey ||
-      prevFiltersRef.current.minYear !== selectedMinYear ||
-      prevFiltersRef.current.maxYear !== selectedMaxYear ||
-      prevFiltersRef.current.theme !== themeTypeFilter ||
-      prevFiltersRef.current.mode !== mode;
-
-    hasLoadedInitialCatalogRef.current = true;
-    prevFiltersRef.current = {
-      search: debouncedSearch,
-      artistIds: artistFilterKey,
-      minYear: selectedMinYear,
-      maxYear: selectedMaxYear,
-      theme: themeTypeFilter,
-      mode,
-    };
-
-    // Only show full loading spinner when filtering/searching changes after initial mount.
-    // On first arrival, the newest 2026 songs are already loaded instantly without any spinner!
-    if (filterChanged && !isInitial) {
-      setIsLoadingAniSongDb(true);
-    }
-
-    async function fetchCatalog() {
-      try {
-        const catalogParams = {
-          yearMin: selectedMinYear,
-          yearMax: selectedMaxYear,
-          themeType: themeTypeFilter,
-          limit: activeArtistFilter ? 500 : debouncedSearch.trim() ? 250 : 80,
-          sortKey,
-          sortOrder,
-        };
-
-        if (activeArtistFilter) {
-          const res = await searchSongsByArtistIds(activeArtistFilter.ids, catalogParams);
-          if (isMounted) {
-            setAnisongdbSongs(res.data);
-            setAniSongDbTotal(res.total);
-          }
-          return;
-        }
-
-        // Typed searches stay inside the bundled catalog. The follow-up request
-        // contains only song IDs and adds canonical artist IDs to the rows.
-        const res = await searchStaticCatalog({
-          ...catalogParams,
-          q: debouncedSearch.trim() || undefined,
-        });
-
-        if (isMounted && res.data) {
-          setAnisongdbSongs(res.data);
-          setAniSongDbTotal(res.total || res.data.length);
-          if (filterChanged) setIsLoadingAniSongDb(false);
-        }
-
-        try {
-          const hydratedSongs = await hydrateArtistCredits(res.data);
-          if (isMounted) setAnisongdbSongs(hydratedSongs);
-        } catch (artistError) {
-          // The local catalog remains usable if AnisongDB is temporarily offline;
-          // clicking an artist retries the same ID lookup on demand.
-          console.warn('Could not load canonical artist IDs', artistError);
-        }
-      } catch (err) {
-        console.error('Failed to fetch from AniSongDB', err);
-        if (isMounted && activeArtistFilter) {
-          setAnisongdbSongs([]);
-          setAniSongDbTotal(0);
-          setToast({ message: 'Could not load this exact artist from AnisongDB', type: 'info' });
-        }
-      } finally {
-        if (isMounted && filterChanged) {
-          setIsLoadingAniSongDb(false);
-        }
-      }
-    }
-
-    fetchCatalog();
-    return () => {
-      isMounted = false;
-    };
-  }, [mode, isCatalogMode, debouncedSearch, artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
 
   // Resolve Saved Songs using stable catalog identity first, with the existing
   // metadata fingerprint as a compatibility fallback for older saved entries.
@@ -635,40 +529,110 @@ function MainApp() {
       .map((note) => note.song as AnimeSongItem);
   }, [searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, themeTypeFilter]);
 
-  const mergedCatalogSongs = useMemo(() => {
-    const merged = new Map<string, AnimeSongItem>();
-    for (const song of anisongdbSongs) merged.set(getSongNoteKey(song), song);
-    for (const song of catalogNoteMatches) {
-      const key = getSongNoteKey(song);
-      if (!merged.has(key)) merged.set(key, song);
+  const artistFilterKey = activeArtistFilter?.ids.join(',') || '';
+  const catalogQueryKey = JSON.stringify([mode, searchQuery, debouncedSearch, artistFilterKey,
+    selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
+  const catalogPage = catalogPageRequest.key === catalogQueryKey ? catalogPageRequest.page : 0;
+  const catalogRequestKey = JSON.stringify([catalogQueryKey, catalogPage]);
+
+  useEffect(() => {
+    setCatalogPageRequest((previous) => previous.key === catalogQueryKey
+      ? previous : { key: catalogQueryKey, page: 0 });
+  }, [catalogQueryKey]);
+
+  useEffect(() => {
+    if (!isCatalogMode) return;
+    let current = true;
+    setIsLoadingAniSongDb(true);
+    // Do not fetch intermediate pages while the typed query is still debouncing.
+    if (searchQuery !== debouncedSearch) return;
+    async function fetchPage() {
+      try {
+        const params = {
+          yearMin: selectedMinYear, yearMax: selectedMaxYear, themeType: themeTypeFilter,
+          sortKey, sortOrder, limit: CATALOG_PAGE_SIZE, offset: catalogPage * CATALOG_PAGE_SIZE,
+        };
+        const result = activeArtistFilter
+          ? await searchSongsByArtistIds(activeArtistFilter.ids, params)
+          : await searchStaticCatalog({ ...params, q: debouncedSearch }, catalogNoteMatches);
+        if (!current) return;
+        setAnisongdbSongs(result.data);
+        setAniSongDbTotal(result.total);
+        setCatalogOffset(result.offset);
+        setLoadedCatalogKey(catalogRequestKey);
+        setIsLoadingAniSongDb(false);
+        if (result.offset !== params.offset) {
+          setCatalogPageRequest({ key: catalogQueryKey, page: Math.floor(result.offset / CATALOG_PAGE_SIZE) });
+        }
+        if (!activeArtistFilter) {
+          try {
+            const hydrated = await hydrateArtistCredits(result.data);
+            if (current) setAnisongdbSongs(hydrated);
+          } catch (error) {
+            console.warn('Could not load canonical artist IDs', error);
+          }
+        }
+      } catch (error) {
+        if (!current) return;
+        setAnisongdbSongs([]);
+        setAniSongDbTotal(0);
+        setCatalogOffset(0);
+        setLoadedCatalogKey(catalogRequestKey);
+        setIsLoadingAniSongDb(false);
+        setToast({ message: 'Could not load these catalog results. Try the search again.', type: 'info' });
+      }
     }
-    return Array.from(merged.values());
-  }, [anisongdbSongs, catalogNoteMatches]);
+    fetchPage();
+    return () => { current = false; };
+  }, [isCatalogMode, catalogRequestKey, catalogQueryKey, catalogPage, searchQuery, debouncedSearch,
+    artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder, catalogNoteMatches]);
 
-  const sortedCatalogSongs = useMemo(
-    () => sortSongItems(mergedCatalogSongs, sortKey, sortOrder),
-    [mergedCatalogSongs, sortKey, sortOrder]
-  );
-
-  const catalogLocalOnlyCount = Math.max(0, mergedCatalogSongs.length - anisongdbSongs.length);
   const currentDisplayList = isCatalogMode
-    ? sortedCatalogSongs
+    ? anisongdbSongs
     : mode === 'collection'
       ? filteredAndSortedCollection
       : filteredAndSortedNotes;
 
   const totalFilteredCount = currentDisplayList.length;
   const totalItemsCount = isCatalogMode
-    ? aniSongDbTotal + catalogLocalOnlyCount
+    ? aniSongDbTotal
     : mode === 'collection'
       ? collectionEntries.length
       : noteRecords.length;
 
   const isLoading = isCatalogMode
-    ? isLoadingAniSongDb
+    ? isLoadingAniSongDb || loadedCatalogKey !== catalogRequestKey
     : mode === 'collection'
       ? isLoadingCollection
       : false;
+
+  const catalogPageCount = Math.max(1, Math.ceil(aniSongDbTotal / CATALOG_PAGE_SIZE));
+  const catalogNavigation = isCatalogMode ? (
+    <nav aria-label="Catalog result pages" className="my-4 flex flex-wrap items-center justify-between gap-2">
+      <span role="status" className="text-xs text-neutral-400">
+        {isLoading ? 'Loading results…' : aniSongDbTotal
+          ? `Results ${catalogOffset + 1}–${catalogOffset + anisongdbSongs.length} of ${aniSongDbTotal.toLocaleString()} · Page ${Math.floor(catalogOffset / CATALOG_PAGE_SIZE) + 1} of ${catalogPageCount}`
+          : 'No results'}
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {[
+          { label: 'First', page: 0, disabled: catalogPage === 0 },
+          { label: 'Previous', page: catalogPage - 1, disabled: catalogPage === 0 },
+          { label: 'Next', page: catalogPage + 1, disabled: catalogPage + 1 >= catalogPageCount },
+          { label: 'Last', page: catalogPageCount - 1, disabled: catalogPage + 1 >= catalogPageCount },
+        ].map(({ label, page, disabled }) => (
+          <button key={label} type="button" disabled={isLoading || disabled}
+            onClick={() => {
+              setCatalogPageRequest({ key: catalogQueryKey, page });
+              document.getElementById('catalog-results-start')?.scrollIntoView({ block: 'start' });
+            }}
+            className="min-h-11 px-3 rounded-lg border border-neutral-700 text-sm hover:bg-neutral-700 cursor-pointer disabled:opacity-40 disabled:cursor-default focus-visible:outline-2 focus-visible:outline-emerald-400">
+            {label}
+          </button>
+        ))}
+      </div>
+    </nav>
+  ) : null;
 
   const songView = (
     <>
@@ -708,6 +672,7 @@ function MainApp() {
         />
       )}
 
+      <div id="catalog-results-start" className="scroll-mt-44 md:scroll-mt-24">{catalogNavigation}</div>
       {/* Data Table */}
       {isLoading ? (
         <div className="bg-[#232628] border border-neutral-800 rounded-xl p-16 text-center shadow-sm flex flex-col items-center justify-center gap-3">
@@ -721,6 +686,7 @@ function MainApp() {
       ) : (
         <SongTable
           entries={currentDisplayList}
+          rowOffset={isCatalogMode ? catalogOffset : 0}
           sortKey={sortKey}
           sortOrder={sortOrder}
           onSort={handleSort}
@@ -738,6 +704,7 @@ function MainApp() {
           allTracks={mode === 'collection' ? collectionTracks : undefined}
         />
       )}
+      {catalogNavigation}
 
     </>
   );

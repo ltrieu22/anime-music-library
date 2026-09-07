@@ -1,18 +1,13 @@
 import { AnimeSongItem, ArtistCredit } from '../types';
 import { titlesFromAnisongDb } from './animeTitles';
+import { searchCatalogResults, type CatalogParams } from './catalogResults';
 
 const ANISONGDB_API = 'https://anisongdb.com/api';
 const AMQ_MEDIA_BASE = 'https://naedist.animemusicquiz.com/';
 const artistCreditsBySongId = new Map<number, ArtistCredit[]>();
 
-interface ArtistSearchParams {
-  yearMin?: number;
-  yearMax?: number;
-  themeType?: string;
-  limit?: number;
-  sortKey?: string;
-  sortOrder?: string;
-}
+type ArtistSearchParams = Omit<CatalogParams, 'q'>;
+const artistResults = new Map<string, Promise<AnimeSongItem[]>>();
 
 function asMediaUrl(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -43,14 +38,6 @@ function sanitizeArtistCredit(value: unknown): ArtistCredit | null {
     groups: nestedCredits(candidate.groups),
     members: nestedCredits(candidate.members),
   };
-}
-
-function getThemeKind(themeType: unknown): 'OP' | 'ED' | 'IN' | '' {
-  const value = String(themeType || '').toUpperCase();
-  if (value.startsWith('OP') || value.includes('OPENING')) return 'OP';
-  if (value.startsWith('ED') || value.includes('ENDING')) return 'ED';
-  if (value.startsWith('IN') || value.includes('INSERT')) return 'IN';
-  return '';
 }
 
 export function getAnnSongId(value: string | number): number | null {
@@ -138,50 +125,21 @@ export async function hydrateArtistCredits(songs: AnimeSongItem[]): Promise<Anim
   });
 }
 
-function filterAndSortSongs(songs: AnimeSongItem[], params: ArtistSearchParams) {
-  const yearMin = params.yearMin === undefined ? null : Number(params.yearMin);
-  const yearMax = params.yearMax === undefined ? null : Number(params.yearMax);
-  const requestedTheme = String(params.themeType || 'ALL').toUpperCase();
-
-  const filtered = songs.filter((song) => {
-    const year = Number(song.anime_year);
-    if (year && yearMin !== null && year < yearMin) return false;
-    if (year && yearMax !== null && year > yearMax) return false;
-    return requestedTheme === 'ALL' || getThemeKind(song.theme_type) === requestedTheme;
-  });
-
-  const key = String(params.sortKey || 'anime_year');
-  const direction = String(params.sortOrder || 'desc').toLowerCase() === 'asc' ? 1 : -1;
-  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-  filtered.sort((left, right) => {
-    const leftValue = (left as any)[key];
-    const rightValue = (right as any)[key];
-    if (key === 'anime_year') {
-      const comparison = (Number(leftValue) || 0) - (Number(rightValue) || 0);
-      if (comparison !== 0) return comparison * direction;
-    }
-    const comparison = collator.compare(String(leftValue ?? ''), String(rightValue ?? ''));
-    if (comparison !== 0) return comparison * direction;
-    return collator.compare(left.anime_name, right.anime_name);
-  });
-
-  const total = filtered.length;
-  const limit = Math.min(500, Math.max(1, Number(params.limit) || 500));
-  return { data: filtered.slice(0, limit), total, hasMore: total > limit };
-}
-
 /** Search by canonical artist IDs so aliases, group credits, and same-name artists are resolved correctly. */
 export async function searchSongsByArtistIds(ids: number[], params: ArtistSearchParams = {}) {
-  const artistIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id))));
-  if (artistIds.length === 0) return { data: [], total: 0, hasMore: false };
-
-  const payload = await requestSongs('artist_ids_request', {
-    artist_ids: artistIds,
-    group_granularity: 0,
-    max_other_artist: 99,
-  });
-  const songs = payload
-    .map(mapAnisongDbSong)
-    .filter((song): song is AnimeSongItem => song !== null);
-  return filterAndSortSongs(songs, params);
+  const artistIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id)))).sort((a, b) => a - b);
+  if (artistIds.length === 0) return searchCatalogResults([], {}, params);
+  const key = artistIds.join(',');
+  let pending = artistResults.get(key);
+  if (!pending) {
+    pending = requestSongs('artist_ids_request', {
+      artist_ids: artistIds,
+      group_granularity: 0,
+      max_other_artist: 99,
+    }).then((payload) => payload.map(mapAnisongDbSong)
+      .filter((song): song is AnimeSongItem => song !== null));
+    artistResults.set(key, pending);
+    pending.catch(() => artistResults.delete(key));
+  }
+  return searchCatalogResults(await pending, {}, params);
 }

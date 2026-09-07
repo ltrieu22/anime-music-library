@@ -1,22 +1,23 @@
 import type { AnimeSongItem } from '../types';
 import { getSearchableAnimeTitles } from './animeTitles';
+import { getSearchTerms, normalizeSearchText } from './searchText';
 
 type SearchableSong = Pick<AnimeSongItem, 'anime_name' | 'anime_name_english' | 'anime_name_romaji' | 'anime_alt_names' | 'artist' | 'song_name'>;
 
 function normalize(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizeSearchText(value);
 }
 
 function artistPhrasePattern(phrase: string): RegExp {
   const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Unicode boundaries also prevent short aliases matching inside non-Latin names.
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'u');
+  return new RegExp(`(?<![\\p{L}\\p{N}\\p{M}_])${escaped}(?![\\p{L}\\p{N}\\p{M}_])`, 'u');
 }
 
 /** Shared typed-search matching for the static catalog and optional server. */
 export function createCatalogQueryMatcher(query: string, aliases: Record<string, string[]>) {
   const q = normalize(query);
-  const queryTerms = q.split(' ').filter(Boolean);
+  const queryTerms = getSearchTerms(q);
   const expansions: { artists: RegExp[]; remainingTerms: string[] }[] = [];
 
   for (const [key, relatedArtists] of Object.entries(aliases)) {

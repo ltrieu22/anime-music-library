@@ -27,6 +27,7 @@ import { AnimeHoverCard } from './AnimeHoverCard';
 import { usePlayer } from '../context/PlayerContext';
 import { toSongTrack } from '../utils/player';
 import { ThemeBadge } from './ThemeBadge';
+import { findSearchMatchRanges } from '../services/searchText';
 
 type SongRowItem = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
 
@@ -50,6 +51,7 @@ interface OpenSongMenu {
 
 interface SongTableProps {
   entries: SongRowItem[];
+  rowOffset?: number;
   sortKey: SortKey;
   sortOrder: SortOrder;
   onSort: (key: SortKey) => void;
@@ -80,18 +82,7 @@ const getNoteSnippet = (text: string, query: string) => {
   const compactText = text.replace(/\s+/g, ' ').trim();
   if (compactText.length <= NOTE_SNIPPET_LENGTH) return compactText;
 
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  let matchIndex = normalizedQuery
-    ? compactText.toLocaleLowerCase().indexOf(normalizedQuery)
-    : -1;
-
-  if (matchIndex < 0 && normalizedQuery) {
-    const termIndexes = normalizedQuery
-      .split(/\s+/)
-      .map((term) => compactText.toLocaleLowerCase().indexOf(term))
-      .filter((index) => index >= 0);
-    matchIndex = termIndexes.length > 0 ? Math.min(...termIndexes) : -1;
-  }
+  const matchIndex = findSearchMatchRanges(compactText, query)[0]?.start ?? -1;
 
   let start = matchIndex >= 0 ? Math.max(0, matchIndex - 32) : 0;
   let end = Math.min(compactText.length, start + NOTE_SNIPPET_LENGTH);
@@ -104,6 +95,7 @@ const getNoteSnippet = (text: string, query: string) => {
 
 export const SongTable: React.FC<SongTableProps> = ({
   entries,
+  rowOffset = 0,
   sortKey,
   sortOrder,
   onSort,
@@ -136,28 +128,25 @@ export const SongTable: React.FC<SongTableProps> = ({
     const str = String(text);
     if (!query.trim()) return str;
 
-    const escapedTerms = query
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .sort((a, b) => b.length - a.length)
-      .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
-    const exactMatch = new RegExp(`^(?:${escapedTerms.join('|')})$`, 'i');
-    const parts = str.split(regex);
+    const ranges = findSearchMatchRanges(str, query);
+    if (ranges.length === 0) return str;
 
-    return parts.map((part, i) =>
-      exactMatch.test(part) ? (
+    const parts: React.ReactNode[] = [];
+    let offset = 0;
+    for (const range of ranges) {
+      if (range.start > offset) parts.push(str.slice(offset, range.start));
+      parts.push(
         <mark
-          key={i}
+          key={`${range.start}:${range.end}`}
           className="bg-emerald-500/30 text-emerald-300 font-semibold px-0.5 rounded"
         >
-          {part}
+          {str.slice(range.start, range.end)}
         </mark>
-      ) : (
-        part
-      )
-    );
+      );
+      offset = range.end;
+    }
+    if (offset < str.length) parts.push(str.slice(offset));
+    return parts;
   };
 
   const renderSortIcon = (key: SortKey) => {
@@ -603,7 +592,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                   className="hover:bg-neutral-800/40 transition-colors group"
                 >
                   <td className="py-3 px-4 text-xs font-mono text-neutral-500">
-                    {!playlistView && typeof item.id === 'number' ? item.id : index + 1}
+                    {!playlistView && typeof item.id === 'number' ? item.id : rowOffset + index + 1}
                   </td>
 
                   {/* Anime Name with Hover Poster Card & Direct AniList Link */}
@@ -734,7 +723,7 @@ export const SongTable: React.FC<SongTableProps> = ({
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-mono text-neutral-500 mr-2">
-                    #{!playlistView && typeof item.id === 'number' ? item.id : index + 1}
+                    #{!playlistView && typeof item.id === 'number' ? item.id : rowOffset + index + 1}
                   </span>
                   <AnimeHoverCard
                     animeName={item.anime_name}
