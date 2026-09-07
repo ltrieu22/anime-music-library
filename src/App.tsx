@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
-import { PlaylistsProvider } from './context/PlaylistsContext';
+import { PlaylistsProvider, usePlaylists } from './context/PlaylistsContext';
+import { persistBackupImport, type BackupImport } from './services/dataBackup';
 import { PlaylistSongPicker } from './components/collection/PlaylistSongPicker';
 import { PlaylistDetail } from './components/collection/PlaylistDetail';
 import { createSongReference, type PlaylistSongReference } from './services/playlistsStorage';
@@ -28,7 +29,6 @@ import {
   createEntry,
   updateEntry,
   deleteEntry,
-  importEntries,
   resetEntriesToDefault,
 } from './services/api';
 import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
@@ -42,7 +42,6 @@ import {
   getSongMetadataFingerprint,
   getSongNoteKey,
   loadNotes,
-  saveNotes,
   upsertNote,
 } from './services/notesStorage';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
@@ -110,6 +109,7 @@ function sortSongItems<T extends NoteableSong>(
 
 function MainApp() {
   const { closePlayer } = usePlayer();
+  const { refresh: refreshPlaylists } = usePlaylists();
   const { searchTitles, displayTitle } = useTitleLanguage();
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
   const [mode, setMode] = useState<DatabaseMode>('anisongdb');
@@ -538,15 +538,14 @@ function MainApp() {
     }
   };
 
-  const handleImportData = async (imported: AnimeSongEntry[], importedNotes: NoteMap) => {
-    const result = await importEntries(imported);
+  const handleImportData = async (imported: BackupImport) => {
+    persistBackupImport(imported);
     closePlayer();
-    setCollectionEntries(result);
-    if (!saveNotes(importedNotes)) {
-      throw new Error('Songs were imported, but this browser could not save the personal notes.');
-    }
-    setNotes(importedNotes);
-    showToast(`Imported ${result.length} songs and ${Object.keys(importedNotes).length} notes`);
+    setCollectionEntries(imported.entries);
+    if (imported.notes !== undefined) setNotes(imported.notes);
+    if (imported.playlists !== undefined) refreshPlaylists();
+    setActiveNoteSong(null);
+    showToast('Backup imported successfully');
   };
 
   const handleReset = async () => {

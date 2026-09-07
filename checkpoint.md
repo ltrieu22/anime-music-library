@@ -8,9 +8,9 @@ This document records completed work and the next features discussed with the us
 
 The user wants work split to accommodate their Codex five-hour usage window. The batches below are deliberately small and independently resumable. Scope estimates are engineering estimates, not guarantees about Codex usage or how much work a usage window allows. Start with one batch per session and reserve room for verification and a handoff. Do not combine all batches into one task.
 
-**Batch 9 is complete. Next eligible batch: 10 — playlist membership, ordering, and playback, not started. Batches 1, 2, 4, 5, 6, 7, 8, 9, and 12 are complete.**
+**Batch 13 is complete. Next eligible batch: 14 — persistent master volume, not started. Batches 1, 2, and 4–13 are complete.**
 
-The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 below, with dependencies, difficulty, and completion criteria. Batch 12 is complete; batches 13–26 remain planned. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
+The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 below, with dependencies, difficulty, and completion criteria. Batches 12–13 are complete; batches 14–26 remain planned. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
 
 ## Current state — already implemented
 
@@ -46,7 +46,7 @@ Recommended direction from the discussion:
 - Reuse the song table and playback system across Saved Songs and named playlists.
 - Start with browser-local storage and JSON backup/restore. The expanded plan adds public song links in batch 22 and accounts/cloud saved-song sync in batches 24–26. Public/shared playlists remain a separate future feature.
 
-Batch 9 implements the library as cards for built-in Saved Songs and custom playlists, with create/rename/delete dialogs and empty playlist details. Song assignment and custom playlist playback remain batch 10; playlist backup/restore remains batch 11.
+Batch 9 implements the library as cards for built-in Saved Songs and custom playlists, with create/rename/delete dialogs. Batch 10 adds membership toggles, persistent ordering, and playlist playback. Batch 11 completes versioned backup/restore for saved songs, notes, and playlists; see the handoff below.
 
 ### Playback and queue
 
@@ -109,7 +109,7 @@ References verified during the discussion:
 
 ## Batches for future sessions
 
-The remaining original sequence is 10–11. Independent UI/search batches can be moved earlier; a useful sequence for the new requests is 12 → 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
+The original sequence through batch 11 is complete, as is batch 12. Independent UI/search batches can be moved earlier; a useful remaining sequence is 13 → 14 → 15 → 16 → 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
 
 Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated state, schema, or interaction changes; **High** = external data, security, migration, or conflict handling. Dependencies below are implementation prerequisites, not new package requirements.
 
@@ -210,6 +210,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Reuse the queue engine for Play Playlist, shuffle, and clicking a song within a playlist. Creating a playlist should not duplicate the entire catalog.
 - **Done when:** one song can belong to two playlists, removing it from one leaves the other intact, ordering survives reload, and playback uses the selected playlist. A catalog title click must still replace that playback context.
 - Do not fold account sync or sharing into this batch.
+- **Complete in push `f7ae7ad` (2026-09-07):** membership/saved-song toggles, playlist detail tables, independent removal, persistent order, and queue playback. Live remote hash verified before batch 11; stale checkpoint status corrected.
 
 ### Batch 11 — backups and final persistence checks
 
@@ -217,6 +218,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Check refresh/reopen persistence, missing-song handling, bilingual metadata, delete isolation, and playlist-to-catalog playback transitions.
 - **Done when:** export/import restores Saved Songs, notes, and multiple playlists with their order and identities intact; legacy imports remain usable.
 - Integrate backup updates earlier if convenient, but do not call the playlist feature complete until this work is verified.
+- **Complete on 2026-09-07:** v2 backup/restore, legacy compatibility, import review and storage-failure recovery, 55 passing service tests, and browser export/import/persistence/playback checks. See handoff below.
 
 ## Additional requests — verified starting points (2026-09-05)
 
@@ -240,6 +242,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Animate the bar wrapper without remounting the media element or replaying the entrance on every track change. Preserve the measured bar height used for floating-video positioning and mobile clearance.
 - CSS is sufficient; `motion` is already installed if lifecycle animation needs it. No additional animation package is required.
 - **Done when:** opening/reopening slides upward, changing tracks keeps the bar stable, and reduced-motion, mobile layout, floating-video placement, and audio continuity work.
+- **Complete on 2026-09-07:** added a 240ms CSS upward entrance on the existing bar wrapper, enabled only for `prefers-reduced-motion: no-preference`. Track changes retain the wrapper and the single media element stays mounted. Floating-video clearance now uses measured bar height, independent of the entrance translation. Verification details and browser-tool limits are recorded in the batch 13 handoff below.
 
 ### Batch 14 — persistent master volume
 
@@ -384,11 +387,11 @@ At the end of each batch, update the table below with completed behavior, checks
 | 6 | Complete | Remembered EN/JP display, bilingual search, and uninterrupted playback through toggles; validation below |
 | 7 | Complete | Editable queue engine with occurrence IDs, finite/manual queue rules, and reducer plus browser integration coverage. Validation details below. |
 | 8 | Complete | Responsive queue actions/panel with accessible removal, clearing, and move controls; desktop/mobile playback QA passed. Validation details below. |
-| 9 | Not started | Library and playlist creation |
-| 10 | Not started | Playlist songs/order/playback |
-| 11 | Not started | Backups and persistence validation |
+| 9 | Complete | Library and playlist creation; original handoff below |
+| 10 | Complete | Playlist membership and Saved Songs toggles, song ordering, and playback in verified push f7ae7ad |
+| 11 | Complete | v2 backups include ordered playlists, stable identities and snapshots; legacy preservation, storage failure recovery, and browser persistence verified |
 | 12 | Complete | Pointer cursor on clickable desktop/mobile artists; exact-ID click and keyboard behavior verified. Offscreen Add Song covers also use native lazy loading. |
-| 13 | Not started | Upward bottom-bar entrance with reduced-motion support |
+| 13 | Complete | 240ms upward entrance on open/reopen; stable track changes and height-based floating-video clearance; reduced-motion CSS guard |
 | 14 | Not started | Persist global volume with 40% default |
 | 15 | Not started | Accent-insensitive search; preserve alias correctness |
 | 16 | Not started | Pagination across complete results, including matches beyond 500 |
@@ -542,6 +545,35 @@ Batch 9 validation and handoff (2026-09-07):
 - **User handoff:** rebuilt production app is running on port 3000, started with `NODE_ENV=production` / `npm.cmd start` after confirming the port was free. At `http://127.0.0.1:3000/`, the user's empty collection, English preference, and existing one note were preserved; the Notes row/editor action remains available. Left a browser tab on My Collection. No playlist writes were made on the user's normal origin.
 - **Remaining work:** none for batch 9. Playlist membership, ordering, and playback are batch 10. JSON backups still contain only saved songs and notes; playlist backup/restore is batch 11 and Manage Data states this limitation. Existing song import/reset does not change custom playlists.
 
-Suggested next prompt:
+Earlier suggested batch-10 prompt (now completed):
 
 > Read checkpoint.md and implement batch 10 only: playlist membership, persistent ordering, and playback. Reuse the batch-9 stable song references and batch-7/8 queue APIs. Add playlist assignment from Catalog/Saved Songs, per-playlist removal, and playlist playback. Verify one song can belong to two playlists independently, preserve Saved Songs/notes/bilingual titles, update this checkpoint, and stop before batch 11.
+
+Batch 11 validation and handoff (2026-09-07):
+
+- **Baseline:** clean local `main` at `f7ae7ad7b79abe9071d7ea41308208710e4274d7` matched the live GitHub `refs/heads/main` via `git ls-remote origin refs/heads/main`. This push already completed batch 10 despite stale checkpoint summaries. No commit or push was made during batch 11.
+- **Backup contract:** `createDataBackup` emits `{ version: 2, entries, notes, playlists }`. Arrays retain library order and per-playlist song order; saved numbers, playlist IDs, catalog/manual song identities, empty playlists, bilingual metadata, and independent snapshots survive round trip. Playlist storage remains version 1; existing browsers need no migration. The catalog itself, playback queue, and display preferences are outside the backup.
+- **Import behavior:** choosing a file validates and previews its replacement scope before writing. V2 replaces all three sections; v1 replaces saved songs/notes and preserves playlists; legacy arrays replace saved songs and preserve both notes and playlists. Omitted sections are never written, so a legacy preview cannot overwrite later changes to preserved sections. Empty included sections explicitly clear that section. Cancel/close discards the preview. Invalid/future versions, duplicate saved numbers or playlist IDs/names/references, missing local snapshots, and malformed playlist metadata are rejected. Legacy song/note sanitization remains compatible; skipped records are counted in the preview.
+- **Persistence:** import serializes and reads all affected storage values before writing, rolls back completed writes on failure, and updates React/playlist context and closes playback only after storage succeeds. A failed rollback produces an explicit partial-recovery error. This is synchronous localStorage recovery, not a crash-safe transaction or cross-tab locking; existing cross-tab writes remain last-writer-wins. Export reads current playlists and reports unreadable storage rather than exporting a falsely empty library. Existing Reset behavior still targets saved songs/notes and keeps playlists; UI now states that scope.
+- **Files:** `src/services/dataBackup.ts`, `dataBackup.test.ts`, `playlistsStorage.ts`, `api.ts` (export storage-key constant), `src/components/DataModal.tsx`, `src/App.tsx`, three reusable JSON fixtures in `tests/fixtures/`, and this checkpoint.
+- **Automated verification:** lint, all **55/55** service tests, production build, and whitespace check passed. Seven new tests cover exact JSON/storage round trip, manual identity and notes, missing-reference fallback, deletion isolation, legacy/empty-section rules, invalid backups, failures at every write position with present/absent original keys, read failure, and rollback failure. Existing queue/catalog replacement tests also pass.
+- **Browser verification:** tested on initially empty `http://127.0.0.1:3001/`. Imported the v2 fixture with saved #17/#42, one note, and three playlists (including an empty playlist and a missing catalog reference). Exported through Manage Data, compared the actual downloaded JSON with the fixture using the production parser, and reimported that download successfully. Playlist identities/membership/snapshots/order and note keys matched. Refresh and closing/reopening the tab retained all data; saved numbers remained #17/#42. V1 kept all three playlists; a raw array kept notes and playlists; cancelling a preview left the saved count unchanged and reselecting the same file worked. Reviewed the import preview at 390x844; controls fit and remain scrollable. Viewport reset and test tabs closed.
+- **Playback/title verification:** restored Evening playlist showed unified perspective, an unavailable placeholder, then Hikaru Toki. EN/JP rendered The Heike Story/Heike Monogatari. Play Playlist started unified perspective with one playable upcoming item; Next skipped the missing song and selected Hikaru Toki. Clicking Hikaru Toki in Catalog replaced the playlist queue and disabled Next. The imported private-note preview remained present.
+- **Test artifacts:** reusable fixtures are `tests/fixtures/backup-v2.json`, `backup-v1.json`, and `backup-legacy.json`. Only fixture data was written on port 3001 (2 saved songs, 1 fixture note, 3 playlists remain there for reproduction). The actual fixture export is `C:/Users/luant/Downloads/anime_songs_backup_2026-09-07.json`. No data was changed on the user's normal port-3000 origin. The first browser file chooser call stalled for an extended period; subsequent imports succeeded.
+- **Remaining work:** none for batch 11. Batch 12 was already complete; stop here before batch 13.
+
+Suggested next prompt:
+
+> Read checkpoint.md and implement batch 13 only: animate the bottom player sliding upward when it opens, respect reduced-motion preferences, preserve playback and queue behavior, verify desktop/mobile layout, update the checkpoint, and stop before batch 14.
+
+## Batch 13 handoff — 2026-09-07
+
+- **Implementation:** `src/index.css` adds the short upward animation under `prefers-reduced-motion: no-preference`; the default/reduced-motion path has no animation or transform. `src/components/player/MusicPlayer.tsx` applies the class to the existing conditional bar, without a track key or changes to the media subtree. Closing removes the bar, reopening mounts it and replays the entrance, and track changes retain it. The floating-video bottom boundary uses viewport height minus the bar's measured height and its existing 8px margin, so entrance translation cannot distort clearance.
+- **Automated verification:** TypeScript lint, all **55/55** existing tests, production build, and `git diff --check` passed. Inspected the built CSS to verify the media-query guard and keyframes survive compilation. No new dependency or implementation-mirroring test was added for this small presentation change.
+- **Browser verification:** used the existing fixture-only `http://127.0.0.1:3001/` origin. Played both Heike songs; captured a reopening frame translated downward by 7.72px with its height still 80px, followed by the normal fixed position. An immediate read after switching tracks showed `transform: none` and unchanged bounds. Playback progressed with Pause available; showing/hiding floating video kept playback running. At a 390x844 viewport, reviewed the mobile controls and floating video; the settled floating container ended at y=756, leaving the expected 8px above the bar at y=764. Closed and reopened successfully on mobile. Saved songs, notes, and playlists were not edited. Viewport override reset and temporary tab/server closed.
+- **Verification limits:** the browser automation surface does not expose reduced-motion emulation; that path was verified through the source and compiled CSS guard, not an OS preference toggle. Native phone testing was not performed. The existing desktop-scrollbar behavior in narrow viewport emulation can crop the far-right edge of floating video; this batch does not change its horizontal sizing.
+- **Repository state:** prior batch 11 edits preserved. Batch 13 changes are limited to the player component, global stylesheet, and this checkpoint. No commit or push performed. Stop before batch 14.
+
+Suggested next prompt:
+
+> Read checkpoint.md and implement batch 14 only: persist the shared master volume with a 40% fallback, preserve zero and mute behavior, apply it before playback, verify reload/reopen/track changes, update the checkpoint, and stop before batch 15.

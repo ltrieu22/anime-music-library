@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* The bar mounts only on open/reopen; track changes retain the same wrapper. */
+@media (prefers-reduced-motion: no-preference) {
+  .player-bar-enter {
+    animation: player-bar-enter 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+@keyframes player-bar-enter {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 /* Custom Dual-Knob Range Slider styles */
 .dual-range-slider input[type='range'] {
   -webkit-appearance: none;

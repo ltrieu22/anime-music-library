@@ -68,7 +68,32 @@ function isSongReference(value: unknown): value is PlaylistSongReference {
   const song = ref.snapshot;
   return Boolean(song && (typeof song.id === 'string' || typeof song.id === 'number') &&
     typeof song.anime_name === 'string' && typeof song.song_name === 'string' &&
-    typeof song.artist === 'string' && typeof song.anime_year === 'number');
+    typeof song.artist === 'string' && Number.isFinite(song.anime_year) &&
+    ['theme_type', 'anime_name_english', 'anime_name_romaji'].every((key) =>
+      song[key] === undefined || typeof song[key] === 'string') &&
+    ['video_url', 'audio_url'].every((key) =>
+      song[key] === undefined || song[key] === null || typeof song[key] === 'string') &&
+    (song.anime_alt_names === undefined || (Array.isArray(song.anime_alt_names) && song.anime_alt_names.every((name) => typeof name === 'string'))) &&
+    (song.anilist_id === undefined || song.anilist_id === null || Number.isFinite(song.anilist_id)) &&
+    (song.source === undefined || ['anisongdb', 'animethemes', 'collection'].includes(song.source)));
+}
+
+/** Shared strict validation for storage and imports; never discard broken memberships. */
+export function validatePlaylists(value: unknown): CustomPlaylist[] {
+  if (!Array.isArray(value)) throw new Error('Backup must contain a playlists array.');
+  const ids = new Set<string>();
+  const checked: CustomPlaylist[] = [];
+  for (const list of value) {
+    if (!list || typeof list.id !== 'string' || !list.id.trim() || list.id === SAVED_SONGS_ID || ids.has(list.id) ||
+        typeof list.name !== 'string' || !Array.isArray(list.songs) || !list.songs.every(isSongReference)) {
+      throw new Error('Invalid playlist identity or song reference.');
+    }
+    if (validatePlaylistName(list.name, checked) !== list.name) throw new Error('Invalid playlist name.');
+    if (new Set(list.songs.map(songReferenceKey)).size !== list.songs.length) throw new Error('A playlist contains duplicate song references.');
+    ids.add(list.id);
+    checked.push(list);
+  }
+  return structuredClone(checked);
 }
 
 export function loadPlaylists(storage: StorageAccess = localStorage): CustomPlaylist[] {
@@ -79,16 +104,7 @@ export function loadPlaylists(storage: StorageAccess = localStorage): CustomPlay
   try {
     const data = JSON.parse(raw) as PlaylistLibrary;
     if (data?.version !== 1 || !Array.isArray(data.playlists)) throw new Error();
-    const ids = new Set<string>();
-    const checked: CustomPlaylist[] = [];
-    for (const list of data.playlists) {
-      if (!list || typeof list.id !== 'string' || !list.id.trim() || list.id === SAVED_SONGS_ID || ids.has(list.id) ||
-          typeof list.name !== 'string' || !Array.isArray(list.songs) || !list.songs.every(isSongReference)) throw new Error();
-      if (validatePlaylistName(list.name, checked) !== list.name) throw new Error();
-      ids.add(list.id);
-      checked.push(list);
-    }
-    return checked;
+    return validatePlaylists(data.playlists);
   } catch {
     // Never silently replace unreadable or newer data with an empty library.
     throw new Error('Stored playlists could not be read. Your existing playlist data has been kept.');

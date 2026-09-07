@@ -180,9 +180,10 @@ export const MusicPlayer: React.FC = () => {
   const cleanupPointerInteractionRef = useRef<(() => void) | null>(null);
 
   const getPipBottomBoundary = () => {
-    const playerBarTop = playerBarRef.current?.getBoundingClientRect().top;
-    if (typeof playerBarTop === 'number' && Number.isFinite(playerBarTop)) {
-      return Math.min(window.innerHeight, playerBarTop) - PIP_VIEWPORT_MARGIN;
+    // Translation changes the top during entrance, but not the measured height.
+    const playerBarHeight = playerBarRef.current?.getBoundingClientRect().height;
+    if (typeof playerBarHeight === 'number' && Number.isFinite(playerBarHeight)) {
+      return window.innerHeight - playerBarHeight - PIP_VIEWPORT_MARGIN;
     }
     return window.innerHeight - PLAYER_BAR_FALLBACK_HEIGHT - PIP_VIEWPORT_MARGIN;
   };
@@ -680,7 +681,7 @@ export const MusicPlayer: React.FC = () => {
         <div
           ref={playerBarRef}
           id="spotify-music-player"
-          className="fixed bottom-0 left-0 right-0 h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl select-none"
+          className="player-bar-enter fixed bottom-0 left-0 right-0 h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl select-none"
         >
           {/* LEFT: Anime Poster, Title, and Theme Info */}
           <div className="flex items-center gap-3 min-w-0 w-[24%] sm:w-[30%]">

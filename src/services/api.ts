@@ -1,7 +1,7 @@
 import { AnimeSongEntry, AnimeSearchResult } from '../types';
 import { searchStaticCatalog, loadStaticCatalog } from './catalogEngine';
 
-const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
+export const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
 let isServerApiAvailable: boolean | null = null;
 
 // Pre-warm static catalog in background

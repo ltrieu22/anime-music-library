@@ -1,0 +1,139 @@
+{
+  "version": 2,
+  "entries": [
+    {
+      "id": 17,
+      "source_song_id": "song-34830",
+      "anime_name": "The Heike Story",
+      "anime_name_english": "The Heike Story",
+      "anime_name_romaji": "Heike Monogatari",
+      "anime_alt_names": [],
+      "anime_year": 2021,
+      "artist": "Hitsujibungaku",
+      "song_name": "Hikaru Toki",
+      "theme_type": "Opening 1",
+      "video_url": "https://naedist.animemusicquiz.com/79gb1c.webm",
+      "audio_url": "https://naedist.animemusicquiz.com/l9vaoc.mp3"
+    },
+    {
+      "id": 42,
+      "source_song_id": "song-34831",
+      "anime_name": "The Heike Story",
+      "anime_name_english": "The Heike Story",
+      "anime_name_romaji": "Heike Monogatari",
+      "anime_alt_names": [],
+      "anime_year": 2021,
+      "artist": "agraph feat.ANI (Scha Dara Parr)",
+      "song_name": "unified perspective",
+      "theme_type": "Ending 1",
+      "video_url": "https://naedist.animemusicquiz.com/mv3tss.webm",
+      "audio_url": "https://naedist.animemusicquiz.com/2ppw1b.mp3"
+    }
+  ],
+  "notes": {
+    "catalog:song-34830": {
+      "songKey": "catalog:song-34830",
+      "text": "Batch 11 fixture note",
+      "updatedAt": "2026-09-07T00:00:00.000Z",
+      "song": {
+        "id": "song-34830",
+        "anime_name": "The Heike Story",
+        "anime_year": 2021,
+        "anime_vintage": "Summer 2021",
+        "artist": "Hitsujibungaku",
+        "song_name": "Hikaru Toki",
+        "theme_type": "Opening 1",
+        "video_url": "https://naedist.animemusicquiz.com/79gb1c.webm",
+        "audio_url": "https://naedist.animemusicquiz.com/l9vaoc.mp3",
+        "anilist_id": 138714,
+        "anime_name_english": "The Heike Story",
+        "anime_name_romaji": "Heike Monogatari",
+        "anime_alt_names": [],
+        "source": "anisongdb"
+      }
+    }
+  },
+  "playlists": [
+    {
+      "id": "batch11-evening",
+      "name": "Batch 11 Evening",
+      "songs": [
+        {
+          "source": "anisongdb",
+          "songId": "song-34831",
+          "snapshot": {
+            "id": "song-34831",
+            "anime_name": "The Heike Story",
+            "anime_year": 2021,
+            "anime_vintage": "Summer 2021",
+            "artist": "agraph feat.ANI (Scha Dara Parr)",
+            "song_name": "unified perspective",
+            "theme_type": "Ending 1",
+            "video_url": "https://naedist.animemusicquiz.com/mv3tss.webm",
+            "audio_url": "https://naedist.animemusicquiz.com/2ppw1b.mp3",
+            "anilist_id": 138714,
+            "anime_name_english": "The Heike Story",
+            "anime_name_romaji": "Heike Monogatari",
+            "anime_alt_names": [],
+            "source": "anisongdb"
+          }
+        },
+        {
+          "source": "anisongdb",
+          "songId": "missing-batch11"
+        },
+        {
+          "source": "anisongdb",
+          "songId": "song-34830",
+          "snapshot": {
+            "id": "song-34830",
+            "anime_name": "The Heike Story",
+            "anime_year": 2021,
+            "anime_vintage": "Summer 2021",
+            "artist": "Hitsujibungaku",
+            "song_name": "Hikaru Toki",
+            "theme_type": "Opening 1",
+            "video_url": "https://naedist.animemusicquiz.com/79gb1c.webm",
+            "audio_url": "https://naedist.animemusicquiz.com/l9vaoc.mp3",
+            "anilist_id": 138714,
+            "anime_name_english": "The Heike Story",
+            "anime_name_romaji": "Heike Monogatari",
+            "anime_alt_names": [],
+            "source": "anisongdb"
+          }
+        }
+      ]
+    },
+    {
+      "id": "batch11-shared",
+      "name": "Batch 11 Shared",
+      "songs": [
+        {
+          "source": "anisongdb",
+          "songId": "song-34830",
+          "snapshot": {
+            "id": "song-34830",
+            "anime_name": "The Heike Story",
+            "anime_year": 2021,
+            "anime_vintage": "Summer 2021",
+            "artist": "Hitsujibungaku",
+            "song_name": "Hikaru Toki",
+            "theme_type": "Opening 1",
+            "video_url": "https://naedist.animemusicquiz.com/79gb1c.webm",
+            "audio_url": "https://naedist.animemusicquiz.com/l9vaoc.mp3",
+            "anilist_id": 138714,
+            "anime_name_english": "The Heike Story",
+            "anime_name_romaji": "Heike Monogatari",
+            "anime_alt_names": [],
+            "source": "anisongdb"
+          }
+        }
+      ]
+    },
+    {
+      "id": "batch11-empty",
+      "name": "Batch 11 Empty",
+      "songs": []
+    }
+  ]
+}

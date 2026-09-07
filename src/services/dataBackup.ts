@@ -5,15 +5,81 @@ import type {
   PersonalSongNote,
 } from '../types';
 import { copyAnimeTitleMetadata } from './animeTitles';
+import { validatePlaylists, PLAYLISTS_STORAGE_KEY, type CustomPlaylist } from './playlistsStorage';
+import { NOTES_STORAGE_KEY, NOTES_STORAGE_VERSION } from './notesStorage';
+import { LOCAL_STORAGE_KEY } from './api';
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 const MAX_NOTE_LENGTH = 5_000;
 const MAX_TEXT_FIELD_LENGTH = 2_000;
 
 export interface DataBackupV1 {
-  version: typeof BACKUP_VERSION;
+  version: 1;
   entries: AnimeSongEntry[];
   notes: NoteMap;
+}
+
+export interface DataBackupV2 extends Omit<DataBackupV1, 'version'> {
+  version: typeof BACKUP_VERSION;
+  playlists: CustomPlaylist[];
+}
+
+// Missing sections mean preserve the current browser data, including later edits
+// made while the import preview is open. Empty sections explicitly replace it.
+export interface BackupImport {
+  entries: AnimeSongEntry[];
+  notes?: NoteMap;
+  playlists?: CustomPlaylist[];
+  skippedEntries: number;
+  skippedNotes: number;
+}
+
+export function createDataBackup(entries: AnimeSongEntry[], notes: NoteMap, playlists: CustomPlaylist[]): DataBackupV2 {
+  return structuredClone({ version: BACKUP_VERSION, entries, notes, playlists: validatePlaylists(playlists) });
+}
+
+export function parseDataBackup(value: unknown): BackupImport {
+  let rawEntries: unknown[];
+  let notes: NoteMap | undefined;
+  let playlists: CustomPlaylist[] | undefined;
+  let skippedNotes = 0;
+  if (Array.isArray(value)) rawEntries = value;
+  else if (isRecord(value)) {
+    if (value.version !== 1 && value.version !== BACKUP_VERSION) throw new Error(`Unsupported backup version: ${String(value.version)}`);
+    if (!Array.isArray(value.entries) || !isRecord(value.notes)) throw new Error('Backup must contain a songs array and notes object.');
+    rawEntries = value.entries;
+    notes = sanitizeNotes(value.notes);
+    skippedNotes = Object.keys(value.notes).length - Object.keys(notes).length;
+    if (value.version === BACKUP_VERSION) playlists = validatePlaylists(value.playlists);
+  } else throw new Error('JSON must be an anime-song backup.');
+  const entries = rawEntries.map(sanitizeEntry).filter((entry): entry is AnimeSongEntry => entry !== null);
+  if (entries.length === 0 && rawEntries.length > 0) throw new Error('Backup does not contain any valid song entries.');
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) throw new Error('Backup contains duplicate saved-song numbers.');
+  return { entries, notes, playlists, skippedEntries: rawEntries.length - entries.length, skippedNotes };
+}
+
+/** Commit all included sections before updating React. Recover prior bytes on a failed write. */
+export function persistBackupImport(data: BackupImport, storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = localStorage): void {
+  const writes: [string, string][] = [[LOCAL_STORAGE_KEY, JSON.stringify(data.entries)]];
+  if (data.notes !== undefined) writes.push([NOTES_STORAGE_KEY, JSON.stringify({ version: NOTES_STORAGE_VERSION, notes: data.notes })]);
+  if (data.playlists !== undefined) writes.push([PLAYLISTS_STORAGE_KEY, JSON.stringify({ version: 1, playlists: validatePlaylists(data.playlists) })]);
+  // Read every original value before writing anything; storage access may itself fail.
+  const previous = writes.map(([key]) => storage.getItem(key));
+  let written = 0;
+  try {
+    for (const [key, value] of writes) { storage.setItem(key, value); written++; }
+  } catch {
+    let recovered = true;
+    for (let i = written - 1; i >= 0; i--) {
+      try {
+        if (previous[i] === null) storage.removeItem(writes[i][0]);
+        else storage.setItem(writes[i][0], previous[i]!);
+      } catch { recovered = false; }
+    }
+    throw new Error(recovered
+      ? 'Could not save the backup. Existing data was restored. Check browser storage space or site-data permissions and retry.'
+      : 'Import failed and some previous data could not be restored. Keep your backup file and reload to inspect the stored data before retrying.');
+  }
 }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
