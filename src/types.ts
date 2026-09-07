@@ -1,10 +1,15 @@
+export interface AnimeSeasonMetadata {
+  anime_vintage?: string | null;
+  anime_season?: string;
+}
+
 export interface AnimeTitleMetadata {
   anime_name_english?: string;
   anime_name_romaji?: string;
   anime_alt_names?: string[];
 }
 
-export interface AnimeSongEntry extends AnimeTitleMetadata {
+export interface AnimeSongEntry extends AnimeTitleMetadata, AnimeSeasonMetadata {
   id: number;
   /** Persistent manual-song identity shared by custom playlists. */
   local_song_id?: string;
@@ -19,7 +24,7 @@ export interface AnimeSongEntry extends AnimeTitleMetadata {
   audio_url?: string;
 }
 
-export interface AnimeSongItem extends AnimeTitleMetadata {
+export interface AnimeSongItem extends AnimeTitleMetadata, AnimeSeasonMetadata {
   id: string | number;
   anime_name: string;
   anime_year: number;
@@ -29,7 +34,6 @@ export interface AnimeSongItem extends AnimeTitleMetadata {
   video_url?: string | null;
   audio_url?: string | null;
   anilist_id?: number | null;
-  anime_vintage?: string | null;
   source?: 'anisongdb' | 'animethemes' | 'collection';
   /** Structured AnisongDB credits. The numeric ID identifies the artist across aliases and groups. */
   artists?: ArtistCredit[];
@@ -53,7 +57,7 @@ export interface ActiveArtistFilter {
  * the Notes view continue to render even when a song is no longer in the local
  * collection or the catalog is temporarily unavailable.
  */
-export interface NoteSongSnapshot extends AnimeTitleMetadata {
+export interface NoteSongSnapshot extends AnimeTitleMetadata, AnimeSeasonMetadata {
   id: string | number;
   anime_name: string;
   anime_year: number;

@@ -1,9 +1,11 @@
+import { resolveAnimeSeason } from '../services/animeSeason';
+import type { AnimeSongItem } from '../types';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { AnimeTitleMetadata } from '../types';
 import { getAnimeDisplayTitle, getSearchableAnimeTitles, readTitleLanguage, resolveAnimeTitles, TITLE_LANGUAGE_STORAGE_KEY, type TitleLanguage, type TitleSource } from '../services/animeTitles';
 import { loadStaticCatalog } from '../services/catalogEngine';
 
 const TitleLanguageContext = createContext<{
+  resolveSeason: <T extends Partial<AnimeSongItem>>(song: T) => T;
   language: TitleLanguage;
   setLanguage: (language: TitleLanguage) => void;
   storageError: boolean;
@@ -14,7 +16,7 @@ const TitleLanguageContext = createContext<{
 export function TitleLanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, updateLanguage] = useState(readTitleLanguage);
   const [storageError, setStorageError] = useState(false);
-  const [catalog, setCatalog] = useState<ReadonlyMap<string, AnimeTitleMetadata>>(new Map());
+  const [catalog, setCatalog] = useState<ReadonlyMap<string, AnimeSongItem>>(new Map());
   useEffect(() => {
     let active = true;
     loadStaticCatalog().then(([songs]) => {
@@ -38,7 +40,8 @@ export function TitleLanguageProvider({ children }: { children: React.ReactNode 
   }, []);
   const displayTitle = useCallback((song: TitleSource) => getAnimeDisplayTitle(resolveAnimeTitles(song, catalog), language), [catalog, language]);
   const searchTitles = useCallback((song: TitleSource) => getSearchableAnimeTitles(resolveAnimeTitles(song, catalog)), [catalog]);
-  const value = useMemo(() => ({ language, setLanguage, storageError, displayTitle, searchTitles }), [language, setLanguage, storageError, displayTitle, searchTitles]);
+  const resolveSeason = useCallback(<T extends Partial<AnimeSongItem>,>(song: T): T => resolveAnimeSeason(song, catalog), [catalog]);
+  const value = useMemo(() => ({ resolveSeason, language, setLanguage, storageError, displayTitle, searchTitles }), [resolveSeason, language, setLanguage, storageError, displayTitle, searchTitles]);
   return <TitleLanguageContext.Provider value={value}>{children}</TitleLanguageContext.Provider>;
 }
 

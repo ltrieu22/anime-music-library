@@ -1,3 +1,4 @@
+import { copyAnimeSeasonMetadata } from './src/services/animeSeason';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -91,6 +92,7 @@ async function startServer() {
     const sourceSongId = normalizeSourceSongId(source_song_id);
     const newEntry: AnimeSongEntry = {
       ...copyAnimeTitleMetadata(req.body),
+      ...copyAnimeSeasonMetadata(req.body),
       id: maxId + 1,
       ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
       anime_name: anime_name.trim(),
@@ -121,6 +123,7 @@ async function startServer() {
     entries[idx] = {
       ...entries[idx],
       ...copyAnimeTitleMetadata(req.body),
+      ...copyAnimeSeasonMetadata(req.body),
       ...(source_song_id !== undefined && sourceSongId !== undefined
         ? { source_song_id: sourceSongId }
         : {}),
@@ -172,6 +175,7 @@ async function startServer() {
       return {
         id: Number(e.id) || index + 1,
         ...copyAnimeTitleMetadata(e),
+        ...copyAnimeSeasonMetadata(e),
         ...(sourceSongId !== undefined ? { source_song_id: sourceSongId } : {}),
         anime_name: String(e.anime_name || '').trim(),
         anime_year: Number(e.anime_year) || 2020,
@@ -503,6 +507,7 @@ async function startServer() {
     try {
       const result = searchCatalogResults(localCatalog.length > 0 ? localCatalog : loadLocalCatalog(), artistAliases, {
         q: String(req.query.q || ''),
+        season: req.query.season === undefined ? undefined : String(req.query.season),
         yearMin: req.query.yearMin === undefined ? undefined : Number(req.query.yearMin),
         yearMax: req.query.yearMax === undefined ? undefined : Number(req.query.yearMax),
         themeType: String(req.query.themeType || 'ALL'),

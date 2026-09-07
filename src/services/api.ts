@@ -264,6 +264,7 @@ export async function fetchAniSongDbSongs(params: {
   yearMin?: number;
   yearMax?: number;
   themeType?: string;
+  season?: string;
   limit?: number;
   offset?: number;
   sortKey?: string;
@@ -274,6 +275,7 @@ export async function fetchAniSongDbSongs(params: {
     if (params.q) queryParams.set('q', params.q);
     if (params.yearMin !== undefined) queryParams.set('yearMin', String(params.yearMin));
     if (params.yearMax !== undefined) queryParams.set('yearMax', String(params.yearMax));
+    if (params.season) queryParams.set('season', params.season);
     if (params.themeType) queryParams.set('themeType', params.themeType);
     if (params.limit !== undefined) queryParams.set('limit', String(params.limit));
     if (params.offset !== undefined) queryParams.set('offset', String(params.offset));

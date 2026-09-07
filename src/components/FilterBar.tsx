@@ -1,9 +1,12 @@
+import { ANIME_SEASONS } from '../services/animeSeason';
 import React from 'react';
 import { Search, X, RotateCcw, Calendar, UserRound } from 'lucide-react';
 import { ActiveArtistFilter } from '../types';
 import { DualRangeSlider } from './DualRangeSlider';
 
 interface FilterBarProps {
+  seasonFilter: string;
+  onSeasonChange: (value: string) => void;
   searchQuery: string;
   onSearchChange: (val: string) => void;
   minYear: number;
@@ -22,6 +25,8 @@ interface FilterBarProps {
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
+  seasonFilter,
+  onSeasonChange,
   searchQuery,
   onSearchChange,
   minYear,
@@ -39,6 +44,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onClearArtistFilter,
 }) => {
   const isFiltered =
+    seasonFilter !== 'ALL' ||
     searchQuery.trim() !== '' ||
     Boolean(activeArtistFilter) ||
     selectedMinYear > minYear ||
@@ -165,6 +171,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               {selectedMinYear} – {selectedMaxYear}
             </span>
           </div>
+
+          <label className="flex items-center gap-2 text-neutral-300" title="The anime's catalog season, not the song's release date">
+            Anime season
+            <select aria-label="Anime season" value={seasonFilter} onChange={(event) => onSeasonChange(event.target.value)}
+              className="min-h-11 rounded-lg border border-neutral-700 bg-neutral-900 px-2 text-neutral-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="ALL">All seasons</option>
+              {ANIME_SEASONS.map((season) => <option key={season} value={season}>{season}</option>)}
+              <option value="UNKNOWN">Unknown</option>
+            </select>
+          </label>
 
           {/* Single Continuous Slider with 2 Draggable Knobs */}
           <div className="flex items-center gap-2 flex-1 sm:flex-initial">

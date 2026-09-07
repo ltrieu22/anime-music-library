@@ -1,3 +1,4 @@
+import { copyAnimeSeasonMetadata } from './animeSeason';
 import type {
   AnimeSongEntry,
   NoteMap,
@@ -123,6 +124,7 @@ export const sanitizeEntry = (
   const rawId = Number(value.id);
   const entry: AnimeSongEntry = {
     ...copyAnimeTitleMetadata(value),
+    ...copyAnimeSeasonMetadata(value),
     id: Number.isFinite(rawId) && rawId !== 0 ? rawId : index + 1,
     anime_name: animeName,
     anime_year: sanitizeYear(value.anime_year),
@@ -160,6 +162,7 @@ const sanitizeNoteSong = (
 
   const song: NoteSongSnapshot = {
     ...copyAnimeTitleMetadata(value),
+    ...copyAnimeSeasonMetadata(value),
     id,
     anime_name: animeName,
     anime_year: sanitizeYear(value.anime_year),

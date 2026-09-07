@@ -1,3 +1,4 @@
+import { animeSeasonLabel } from '../services/animeSeason';
 import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React from 'react';
 import { createPortal } from 'react-dom';
@@ -114,7 +115,7 @@ export const SongTable: React.FC<SongTableProps> = ({
   onAddToPlaylist,
   playlistView,
 }) => {
-  const { displayTitle } = useTitleLanguage();
+  const { resolveSeason, displayTitle } = useTitleLanguage();
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
   const { currentTrack, queueSource, isPlaying, playTrack, togglePlay, addToQueue } = usePlayer();
   const [openMenu, setOpenMenu] = React.useState<OpenSongMenu | null>(null);
@@ -497,7 +498,7 @@ export const SongTable: React.FC<SongTableProps> = ({
             : isNotesMode
             ? 'No personal notes match these filters. Add one from Catalog or My Collection.'
             : isCatalogMode
-            ? 'No tracks found in the catalog. Try broadening your year range or theme filter.'
+            ? 'No tracks found in the catalog. Try broadening your year range, season, or theme filter.'
             : 'Saved Songs is currently empty. Switch to the catalog or add songs to get started.'}
         </p>
       </div>
@@ -549,7 +550,7 @@ export const SongTable: React.FC<SongTableProps> = ({
               >
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Year</span>
+                  <span>Season / Year</span>
                   {renderSortIcon('anime_year')}
                 </div>
               </th>
@@ -626,13 +627,9 @@ export const SongTable: React.FC<SongTableProps> = ({
 
                   {/* Year (Distinct static column) */}
                   <td className="py-3 px-4 text-neutral-300 font-mono text-xs whitespace-nowrap">
-                    {item.anime_year ? (
-                      <span className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
-                        {highlightText(item.anime_year, searchQuery)}
-                      </span>
-                    ) : (
-                      <span className="text-neutral-600">—</span>
-                    )}
+                    <span title="Anime catalog season" className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
+                      {highlightText(animeSeasonLabel(resolveSeason(item)), searchQuery)}
+                    </span>
                   </td>
 
                   {/* Artist */}
@@ -693,7 +690,7 @@ export const SongTable: React.FC<SongTableProps> = ({
               className="bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
             >
               <option value="anime_name">Anime Name</option>
-              <option value="anime_year">Year</option>
+              <option value="anime_year">Season / Year</option>
               <option value="artist">Artist</option>
               <option value="song_name">Song Title</option>
               <option value="id">Index (#)</option>
@@ -742,13 +739,11 @@ export const SongTable: React.FC<SongTableProps> = ({
                     </a>
                   </AnimeHoverCard>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {renderThemeBadge(item.theme_type)}
-                  {item.anime_year && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono">
-                      {item.anime_year}
-                    </span>
-                  )}
+                  <span title="Anime catalog season" className="text-xs px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-mono">
+                    {animeSeasonLabel(resolveSeason(item))}
+                  </span>
                 </div>
               </div>
 

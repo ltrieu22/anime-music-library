@@ -1,3 +1,4 @@
+import { copyAnimeSeasonMetadata } from './animeSeason';
 import type {
   AnimeSongEntry,
   AnimeSongItem,
@@ -88,6 +89,7 @@ export function createNoteSongSnapshot(song: NoteableSong): NoteSongSnapshot {
   return {
     id: sourceSongId ?? song.id,
     ...copyAnimeTitleMetadata(song),
+    ...copyAnimeSeasonMetadata(song),
     anime_name: String(song.anime_name || ''),
     anime_year: Number(song.anime_year) || 0,
     artist: String(song.artist || ''),
@@ -144,6 +146,7 @@ function sanitizeSnapshot(value: unknown): NoteSongSnapshot | null {
 
   const snapshot: NoteSongSnapshot = {
     ...copyAnimeTitleMetadata(value),
+    ...copyAnimeSeasonMetadata(value),
     id,
     anime_name: String(value.anime_name ?? ''),
     anime_year: Number.isFinite(year) ? year : 0,

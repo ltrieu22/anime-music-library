@@ -1,3 +1,4 @@
+import { compareAnimeSeason, getAnimeSeason, matchesAnimeSeason } from './animeSeason';
 import type { AnimeSongItem } from '../types';
 import { createCatalogQueryMatcher } from './catalogSearch';
 
@@ -6,6 +7,7 @@ export interface CatalogParams {
   yearMin?: number;
   yearMax?: number;
   themeType?: string;
+  season?: string;
   limit?: number;
   offset?: number;
   sortKey?: string;
@@ -31,7 +33,8 @@ export function searchCatalogResults(
   }
   const theme = String(params.themeType || 'ALL').toUpperCase();
   const filtered = [...merged.values()].filter((song) => {
-    const year = Number(song.anime_year);
+    const year = getAnimeSeason(song).year;
+    if (!matchesAnimeSeason(song, params.season)) return false;
     if (year && params.yearMin !== undefined && year < params.yearMin) return false;
     if (year && params.yearMax !== undefined && year > params.yearMax) return false;
     const kind = String(song.theme_type || '').toUpperCase();
@@ -47,7 +50,10 @@ export function searchCatalogResults(
     const left = a[key as keyof AnimeSongItem];
     const right = b[key as keyof AnimeSongItem];
     let comparison = 0;
-    if (left == null || right == null) {
+    if (key === 'anime_year') {
+      comparison = compareAnimeSeason(a, b, direction);
+      if (comparison) return comparison;
+    } else if (left == null || right == null) {
       comparison = left == null ? (right == null ? 0 : 1) : -1;
       if (comparison) return comparison;
     } else {

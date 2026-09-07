@@ -9,6 +9,7 @@ import { toSongTrack } from '../utils/player';
 
 const song: AnimeSongEntry = {
   id: 17, local_song_id: 'manual-stable-id', anime_name: 'Legacy title', anime_year: 2021,
+  anime_vintage: 'Fall 2021', anime_season: 'Fall',
   anime_name_english: 'English title', anime_name_romaji: 'Romaji title', anime_alt_names: ['日本語', 'Alternate'],
   artist: 'Artist', song_name: 'Manual song', audio_url: 'https://example.com/song.mp3', theme_type: 'Opening 1',
 };

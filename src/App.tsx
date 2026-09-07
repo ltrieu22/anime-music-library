@@ -1,3 +1,4 @@
+import { compareAnimeSeason, copyAnimeSeasonMetadata, getAnimeSeason, matchesAnimeSeason } from './services/animeSeason';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
 import { PlaylistsProvider, usePlaylists } from './context/PlaylistsContext';
@@ -77,9 +78,8 @@ function sortSongItems<T extends NoteableSong>(
     const valB = (b as any)[sortKey];
 
     if (sortKey === 'anime_year') {
-      const numA = Number(valA) || 0;
-      const numB = Number(valB) || 0;
-      if (numA !== numB) return sortOrder === 'asc' ? numA - numB : numB - numA;
+      const comparison = compareAnimeSeason(a, b, sortOrder === 'asc' ? 1 : -1);
+      if (comparison) return comparison;
       return collator.compare(String(a.anime_name || ''), String(b.anime_name || ''));
     }
 
@@ -105,7 +105,7 @@ function sortSongItems<T extends NoteableSong>(
 function MainApp() {
   const { closePlayer } = usePlayer();
   const { refresh: refreshPlaylists } = usePlaylists();
-  const { searchTitles, displayTitle } = useTitleLanguage();
+  const { searchTitles, displayTitle, resolveSeason } = useTitleLanguage();
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
   const [mode, setMode] = useState<DatabaseMode>('anisongdb');
   const isCatalogMode = mode === 'anisongdb' || mode === 'animethemes';
@@ -147,6 +147,7 @@ function MainApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeArtistFilter, setActiveArtistFilter] = useState<ActiveArtistFilter | null>(null);
+  const [seasonFilter, setSeasonFilter] = useState('ALL');
   const [themeTypeFilter, setThemeTypeFilter] = useState('ALL'); // ALL, OP, ED, IN
   const [sortsByMode, setSortsByMode] = useState(DEFAULT_SORTS);
   const { key: sortKey, order: sortOrder } = sortsByMode[mode];
@@ -302,22 +303,25 @@ function MainApp() {
   const filteredAndSortedCollection = useMemo(() => {
     const q = debouncedSearch.trim();
 
-    const filtered = collectionEntries.filter((item) => {
+    const filtered = collectionEntries.map(resolveSeason).filter((item) => {
       const personalNote = findNoteForSong(notes, item);
       const matchesSearch = matchesSearchText(
         [...searchTitles(item), item.artist, item.song_name, item.theme_type, personalNote?.text],
         q
       );
 
-      const year = Number(item.anime_year);
+      const year = getAnimeSeason(item).year;
       const matchesYear =
         !year || (year >= selectedMinYear && year <= selectedMaxYear);
 
-      return matchesSearch && matchesYear;
+      return matchesSearch && matchesYear && matchesAnimeSeason(item, seasonFilter);
     });
 
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
     return filtered.sort((a, b) => {
+      if (sortKey === 'anime_year') {
+        return compareAnimeSeason(a, b, sortOrder === 'asc' ? 1 : -1) || collator.compare(a.anime_name, b.anime_name);
+      }
       const valA = a[sortKey];
       const valB = b[sortKey];
 
@@ -331,7 +335,7 @@ function MainApp() {
       const cmp = collator.compare(String(valA), String(valB));
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [searchTitles, collectionEntries, notes, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
+  }, [resolveSeason, seasonFilter, searchTitles, collectionEntries, notes, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
 
   // Map collection items to SongTrack format for persistent Spotify-style audio/video playback
   const collectionTracks = useMemo<SongTrack[]>(() => {
@@ -392,6 +396,7 @@ function MainApp() {
 
     const newEntry = {
       ...copyAnimeTitleMetadata(song),
+      ...copyAnimeSeasonMetadata(song),
       anime_name: song.anime_name,
       anime_year: Number(song.anime_year) || 2024,
       artist: song.artist || 'Unknown Artist',
@@ -480,6 +485,7 @@ function MainApp() {
     setSelectedMinYear(CATALOG_MIN_YEAR);
     setSelectedMaxYear(CATALOG_MAX_YEAR);
     setThemeTypeFilter('ALL');
+    setSeasonFilter('ALL');
     setSortsByMode((prev) => ({ ...prev, [mode]: DEFAULT_SORTS[mode] }));
   };
 
@@ -492,18 +498,18 @@ function MainApp() {
   // remain useful even if a song is later removed from My Collection.
   const filteredAndSortedNotes = useMemo(() => {
     const filtered = noteRecords.filter((note) => {
-      const song = note.song;
-      const year = Number(song.anime_year);
+      const song = resolveSeason(note.song);
+      const year = getAnimeSeason(song).year;
       const matchesYear = !year || (year >= selectedMinYear && year <= selectedMaxYear);
       const matchesQuery = matchesSearchText(
         [...searchTitles(song), song.artist, song.song_name, song.theme_type, note.text],
         debouncedSearch
       );
-      return matchesYear && matchesQuery;
+      return matchesYear && matchesQuery && matchesAnimeSeason(song, seasonFilter);
     });
 
-    return sortSongItems(filtered.map((note) => note.song), sortKey, sortOrder);
-  }, [searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
+    return sortSongItems(filtered.map((note) => resolveSeason(note.song)), sortKey, sortOrder);
+  }, [resolveSeason, seasonFilter, searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, sortKey, sortOrder]);
 
   // Match note contents locally and merge them with the bundled catalog results.
   const catalogNoteMatches = useMemo(() => {
@@ -512,26 +518,18 @@ function MainApp() {
     return noteRecords
       .filter((note) => note.songKey.startsWith('catalog:'))
       .filter((note) => {
-        const song = note.song;
-        const year = Number(song.anime_year);
-        if (year && (year < selectedMinYear || year > selectedMaxYear)) return false;
-
-        const theme = String(song.theme_type || '').toUpperCase();
-        if (themeTypeFilter === 'OP' && !(theme.startsWith('OP') || theme.includes('OPENING'))) return false;
-        if (themeTypeFilter === 'ED' && !(theme.startsWith('ED') || theme.includes('ENDING'))) return false;
-        if (themeTypeFilter === 'IN' && !(theme.startsWith('IN') || theme.includes('INSERT'))) return false;
-
+        const song = resolveSeason(note.song);
         return matchesSearchText(
           [...searchTitles(song), song.artist, song.song_name, song.theme_type, note.text],
           debouncedSearch
         );
       })
-      .map((note) => note.song as AnimeSongItem);
-  }, [searchTitles, noteRecords, debouncedSearch, selectedMinYear, selectedMaxYear, themeTypeFilter]);
+      .map((note) => resolveSeason(note.song) as AnimeSongItem);
+  }, [resolveSeason, searchTitles, noteRecords, debouncedSearch]);
 
   const artistFilterKey = activeArtistFilter?.ids.join(',') || '';
   const catalogQueryKey = JSON.stringify([mode, searchQuery, debouncedSearch, artistFilterKey,
-    selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder]);
+    selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder]);
   const catalogPage = catalogPageRequest.key === catalogQueryKey ? catalogPageRequest.page : 0;
   const catalogRequestKey = JSON.stringify([catalogQueryKey, catalogPage]);
 
@@ -549,7 +547,7 @@ function MainApp() {
     async function fetchPage() {
       try {
         const params = {
-          yearMin: selectedMinYear, yearMax: selectedMaxYear, themeType: themeTypeFilter,
+          yearMin: selectedMinYear, yearMax: selectedMaxYear, themeType: themeTypeFilter, season: seasonFilter,
           sortKey, sortOrder, limit: CATALOG_PAGE_SIZE, offset: catalogPage * CATALOG_PAGE_SIZE,
         };
         const result = activeArtistFilter
@@ -585,7 +583,7 @@ function MainApp() {
     fetchPage();
     return () => { current = false; };
   }, [isCatalogMode, catalogRequestKey, catalogQueryKey, catalogPage, searchQuery, debouncedSearch,
-    artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, sortKey, sortOrder, catalogNoteMatches]);
+    artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder, catalogNoteMatches]);
 
   const currentDisplayList = isCatalogMode
     ? anisongdbSongs
@@ -638,6 +636,8 @@ function MainApp() {
     <>
       {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
       <FilterBar
+        seasonFilter={seasonFilter}
+        onSeasonChange={setSeasonFilter}
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         minYear={CATALOG_MIN_YEAR}

@@ -1,6 +1,6 @@
 # Anime Song Database — project checkpoint
 
-Updated: 2026-09-07
+Updated: 2026-09-08
 
 ## Start here
 
@@ -8,9 +8,9 @@ This document records completed work and the next features discussed with the us
 
 The user wants work split to accommodate their Codex five-hour usage window. The batches below are deliberately small and independently resumable. Scope estimates are engineering estimates, not guarantees about Codex usage or how much work a usage window allows. Start with one batch per session and reserve room for verification and a handoff. Do not combine all batches into one task.
 
-**Batch 16 is complete. Next eligible batch: 17 — season/year display and basic season filter, not started. Batches 1, 2, and 4–16 are complete.**
+**Batch 17 is complete. Next eligible batch: 18 — filter metadata schema and sample enrichment, not started. Batches 1, 2, and 4–17 are complete.**
 
-The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 below, with dependencies, difficulty, and completion criteria. Batches 12–16 are complete; batches 17–26 remain planned. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
+The additional requests reviewed on 2026-09-05 are tracked as batches 12–26 below, with dependencies, difficulty, and completion criteria. Batches 12–17 are complete; batches 18–26 remain planned. Batch numbers are stable references, not a requirement to finish all earlier numbers first.
 
 ## Current state — already implemented
 
@@ -110,7 +110,7 @@ References verified during the discussion:
 
 ## Batches for future sessions
 
-The sequence through batch 16 is complete. Independent UI/search batches can be moved earlier; a useful remaining sequence is 17 → 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
+The sequence through batch 17 is complete. Independent UI/search batches can be moved earlier; a useful remaining sequence is 18–20 → 21 → 22, with 23 after playlist ordering and 24–26 as a separate cloud project. Each row is a separate stopping point, not a promise to finish multiple rows in one usage window. Rough scope targets include focused verification; data-fetch duration and provider setup depend on external availability. Medium/High batches may need another session if their completion checks do not fit.
 
 Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated state, schema, or interaction changes; **High** = external data, security, migration, or conflict handling. Dependencies below are implementation prerequisites, not new package requirements.
 
@@ -272,6 +272,7 @@ Difficulty: **Low** = localized UI/persistence change; **Medium** = coordinated 
 - Parse `anime_vintage` into normalized season/year, display labels such as **Winter 2026**, and add a season selector beside the existing year controls. Use Winter → Spring → Summer → Fall for chronological season order.
 - Preserve optional vintage/season fields across catalog conversion, Saved Songs, notes, and JSON import/export; enrich older saved snapshots by stable song ID where possible. Keep an Unknown fallback rather than guessing season from a year. Define this as the anime's catalog season, not a claim about the song's release date.
 - **Done when:** all four seasons display/filter correctly, season intersects the year range and existing search/theme filters, and old backups remain readable. Reuse these definitions in batch 20.
+- **Complete on 2026-09-08:** shared season parsing/order/filtering, responsive labels and selector, stable-ID snapshot enrichment, metadata persistence, and verification. See batch-17 handoff below.
 
 ### Batch 18 — metadata for advanced filters
 
@@ -622,3 +623,17 @@ Suggested next prompt:
 Suggested next prompt:
 
 > Read checkpoint.md and implement batch 17 only: season/year display and a basic season filter using existing vintage metadata. Preserve metadata in saved-song, note, and backup paths, use an Unknown fallback, intersect season with existing filters, verify ordering and pagination resets, update the checkpoint, and stop before batch 18.
+
+
+## Batch 17 handoff — 2026-09-08
+
+- **Implementation:** `src/services/animeSeason.ts` defines Winter → Spring → Summer → Fall, case-insensitive vintage parsing, optional `anime_season`, display labels, season matching, chronological comparison, and exact-ID snapshot resolution. A recognized vintage supplies its year; a year-only vintage or existing `anime_year` supplies only a year, never an inferred season. Missing seasons display `Unknown 2021` (or `Unknown` without a year). Year sorting compares year then season, reversing known values for descending order; unknown seasons stay last within their year and unknown years stay last overall.
+- **UI/search:** the shared table shows Season / Year on desktop and mobile. An accessible 44px season selector beside the year controls offers All seasons, the four chronological seasons, and Unknown; its tooltip identifies this as the anime's catalog season, not a song release date. Season intersects typed search, year, and catalog theme/exact-artist filters. Saved Songs and Notes also use season filtering and ordering. Reset clears season; changing season changes the catalog query key and returns to page 1. Catalog-note matches are filtered after merging with canonical metadata, so stale snapshots cannot prematurely exclude a match.
+- **Persistence:** optional vintage/season fields survive catalog-to-saved conversion, note snapshots and sanitization, legacy/v1/v2 backup imports/exports, playlist snapshots, and optional-server entry handling. The existing catalog metadata context fills missing seasons in old saved/note/table snapshots by `source_song_id` or exact catalog `id`, without fuzzy matching, identity changes, or automatic storage rewrites. Unresolvable old/manual songs retain Unknown. Existing backup schemas remain valid; no catalog data or user browser storage was changed.
+- **Automated verification:** TypeScript lint, all **76/76** service tests, production build, and `git diff --check` passed. Four new season tests cover normalization/Unknown, chronological order, combined filters, pagination clamping, note merging, upstream conversion, stable-ID enrichment, unchanged note identity, and full catalog traversal. The existing backup round-trip fixture now includes vintage and normalized season, verifying both across saved entries, notes, playlists, and persisted JSON. Full traversal partitions all **38,821** unique catalog songs into Winter **8,630**, Spring **11,362**, Summer **8,037**, Fall **10,792**, Unknown **0**, with no missing or duplicated IDs.
+- **Browser verification:** used a temporary static preview on the empty `http://127.0.0.1:3002/` origin. Verified all four season counts, Winter page 2 → Spring page 1 reset, Unknown empty results, reset, and desktop labels. At 390×844, reviewed the selector and Summer 2021 Heike labels; Winter excluded both Heike songs, Summer + Openings returned one, 2010s excluded it, and 2020s restored it. Viewport reset and temporary tab/server closed. Existing mobile header/decade strips retain horizontal scrolling. No native-phone test or new live upstream/API-server test was performed; optional server and artist paths reuse the tested shared filter contract.
+- **Build/repository:** Vite required its previously documented wider filesystem access. Final assets are `index-DcbYwiIP.js` and `index-duMMlc-h.css`. Existing production processes were not restarted; an already-running API process needs a normal restart to load backend changes. No commit or push performed. Batch 17 is complete; stop before batch 18.
+
+Suggested next prompt:
+
+> Read checkpoint.md and implement batch 18 only: optional filter metadata schema and a small enrichment sample with stable anime IDs, provenance, missing-value handling, and resumable tooling. Validate the sample, update this checkpoint, and stop before the full batch-19 enrichment run.
