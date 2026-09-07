@@ -10,6 +10,10 @@ import React, {
 } from 'react';
 import { QueueItem, QueueSource, SongTrack } from '../types/player';
 import { canAdvanceQueue, currentQueueItem, initialQueueState, queueReducer } from '../services/playerQueue';
+import { readStoredPlayerVolume, sanitizePlayerVolume, writeStoredPlayerVolume } from '../services/playerVolume';
+
+// Debounce for volume persistence so slider drags settle before storage writes.
+const VOLUME_PERSIST_DELAY_MS = 150;
 
 export function resolveVideoUrl(url?: string): string {
   if (!url) return '';
@@ -68,10 +72,47 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [volume, setVolumeState] = useState<number>(0.8);
+  // Initialize from the versioned preference; falls back to 40% when absent,
+  // corrupted, or unsupported.
+  const persistedVolumeRef = useRef<number>(-1);
+  const [volume, setVolumeState] = useState<number>(() => {
+    const initial = readStoredPlayerVolume();
+    persistedVolumeRef.current = initial;
+    return initial;
+  });
+  // Mute is transient and never persisted: the player starts unmuted at the
+  // remembered gain.
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Mirrors for event listeners attached once per track (avoids stale closures).
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+
+  // Persist the remembered (unmuted) volume when it differs from the stored
+  // preference. A failed write leaves the previous preference marked as
+  // stored so the next change retries.
+  useEffect(() => {
+    if (volume === persistedVolumeRef.current) return;
+    const timeoutId = window.setTimeout(() => {
+      if (writeStoredPlayerVolume(volume)) {
+        persistedVolumeRef.current = volume;
+      }
+    }, VOLUME_PERSIST_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [volume]);
+
+  // Keep the media element's gain in step with the shared preference,
+  // including a freshly mounted element and native-control mutations.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = volume;
+    video.muted = isMuted;
+  }, [volume, isMuted]);
 
   // A title click replaces the queue. Only collection clicks supply a playlist.
   const playTrack = useCallback((track: SongTrack, newQueue?: SongTrack[]) => {
@@ -146,28 +187,30 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Volume
   const setVolume = useCallback((newVol: number) => {
-    const clamped = Math.max(0, Math.min(1, newVol));
+    const clamped = sanitizePlayerVolume(newVol);
+    if (clamped === null) return;
     setVolumeState(clamped);
     if (videoRef.current) {
       videoRef.current.volume = clamped;
     }
-    if (clamped > 0 && isMuted) {
+    if (clamped > 0 && isMutedRef.current) {
       setIsMuted(false);
       if (videoRef.current) {
         videoRef.current.muted = false;
       }
     }
-  }, [isMuted]);
+  }, []);
 
-  // Mute
+  // Mute. Unmuting restores the remembered gain; the stored preference keeps
+  // tracking the unmuted volume regardless of mute state.
   const toggleMute = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      if (videoRef.current) {
-        videoRef.current.muted = next;
-      }
-      return next;
-    });
+    const next = !isMutedRef.current;
+    setIsMuted(next);
+    const video = videoRef.current;
+    if (video) {
+      video.muted = next;
+      if (!next) video.volume = volumeRef.current;
+    }
   }, []);
 
   // Toggle video display overlay
@@ -210,8 +253,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     video.src = resolvedUrl;
     setCurrentTime(0);
     setDuration(0);
-    video.volume = isMuted ? 0 : volume;
-    video.muted = isMuted;
+    // Apply the remembered gain before playback so the track never starts at
+    // the element's full-volume default; muting silences without discarding it.
+    video.volume = volumeRef.current;
+    video.muted = isMutedRef.current;
 
     let cancelled = false;
     video
@@ -253,11 +298,24 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       nextTrack();
     };
 
+    // Native controls (visible video, fullscreen) can change gain or mute
+    // outside React state; mirror them into the shared preference.
+    const handleVolumeChange = () => {
+      const elementVolume = sanitizePlayerVolume(video.volume);
+      if (elementVolume !== null && elementVolume !== volumeRef.current) {
+        setVolumeState(elementVolume);
+      }
+      if (video.muted !== isMutedRef.current) {
+        setIsMuted(video.muted);
+      }
+    };
+
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('volumechange', handleVolumeChange);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
@@ -265,6 +323,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('volumechange', handleVolumeChange);
     };
   }, [nextTrack]);
 
