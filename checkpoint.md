@@ -1,12 +1,12 @@
 # Anime Song Database — checkpoint
 
-Updated: 2026-09-08
+Updated: 2026-09-09
 
 ## Current state
 
 Implemented: bilingual titles/search, artist matching, season/year filters, pagination, local Saved Songs and named playlists, notes, backups, audio/video playback, editable queues, drag reordering, remembered volume, and public song/search links.
 
-Latest changes: Share song copies immediately. A charcoal/emerald toast appears at bottom center above the player, with a subtle fade/slide and reduced-motion support. Success lasts 3.5 seconds; informational errors last 5.5 seconds. The season dropdown omits Unknown; unknown metadata remains supported internally.
+Latest changes: roadmap items **1–2 completed**. Catalog failures show a persistent error and Retry; failed catalog/alias requests no longer cache empty results. A generated lossless compact catalog and deferred dialogs reduce initial loading. Full measurements and tradeoffs: [initial-load performance](docs/initial-load-performance.md). Song sharing still copies immediately with the existing toast; Unknown season remains supported internally.
 
 This roadmap replaces the long batch history. Planned items are not completed features or permission to implement everything at once. Work on the user-selected item, verify it, then update this file. Inspect Git status and preserve existing edits.
 
@@ -16,8 +16,8 @@ Earlier batches 18–20 remain canceled: do not revive external enrichment runs,
 
 | Priority | Work | Expected result / completion check |
 | --- | --- | --- |
-| 1 | Catalog loading recovery | Distinct loading error and Retry button. Failed requests must not become a permanently cached empty catalog; retry restores results without reloading. |
-| 2 | Initial-load performance | Profile download, parsing and rendering. Evaluate a compact index of existing song fields, deferred metadata and lazy-loaded dialogs. Preserve complete search, exact-ID playback and deployment paths; record before/after measurements. |
+| 1 | **Complete — Catalog loading recovery** | Persistent error and keyboard-accessible Retry; HTTP/network/JSON/schema and alias failures remain retryable. Browser Retry restores results without reloading. |
+| 2 | **Complete — Initial-load performance** | Profiled transfer, parsing and first rendered rows. Lossless payload: 17.40 → 8.25 MB; local median first rows: 377 → 265 ms. Five dialogs load on demand. Search-only/deferred metadata evaluated; full metadata retained. Complete search, exact-ID media and `/anime_db/` verified; see measurement report. |
 | 3 | Search responsiveness | Profile typing/filtering on slower devices. If main-thread work causes stalls, move expensive search/sort into a worker; retain ranking, pagination, private-note merging and stale-result protection. |
 | 4 | Redesign Add to playlist | Match the charcoal/emerald theme: clearer song summary, appealing playlist rows with song counts and selected states, better spacing, and a tidy create-playlist section. Preserve obvious membership toggling, visible errors, keyboard focus and mobile usability. |
 | 5 | Manage multiple playlists | Add **Manage playlists** in My Collection. Selection mode offers checkboxes, selected count, Select all, Cancel/Done and **Delete selected (N)**. Confirm with selected playlist names before deletion. Protect built-in Saved Songs; preserve songs, notes and other memberships. Verify cancellation, persistence, storage failures and active-playlist playback behavior. |
@@ -27,7 +27,7 @@ Earlier batches 18–20 remain canceled: do not revive external enrichment runs,
 | 9 | Mobile layout polish | Reduce horizontal scrolling in navigation and decade controls. Check narrow screens, long titles, touch targets and player/queue clearance. |
 | 10 | Undo removals | Brief Undo action for removing songs from Saved Songs or playlists. Restore identity, membership and order without affecting other lists or notes; expose storage failures. |
 
-Start with loading recovery and measured performance work unless the user chooses a playlist/UI item first. Inspect existing queueing and drag behavior before extending it; do not reimplement completed features.
+Next priority is **3 — Search responsiveness**, when requested. Items 3 onward were not implemented in this pass. Inspect existing queueing and drag behavior before extending it; do not reimplement completed features.
 
 ## Later work
 
@@ -54,18 +54,19 @@ Start with loading recovery and measured performance work unless the user choose
 | Main UI | `src/App.tsx`, `src/components/SongTable.tsx`, `FilterBar.tsx` |
 | Sharing / URL state | `src/context/SongShareContext.tsx`; `src/services/songSharing.ts`, `catalogUrlState.ts`, `useCatalogSearchState.ts` |
 | Catalog performance | `src/services/catalogEngine.ts`, `catalogResults.ts`, `catalogSearch.ts`, `searchText.ts` |
+| Catalog loading / transport | `src/services/catalogLoader.ts`, `catalogPayload.ts`; `scripts/catalogAsset.ts`, `profile-catalog.ts`, `profile-initial-load.mjs` |
 | Playlists | `src/components/collection/PlaylistSongPicker.tsx`, `CollectionLibrary.tsx`; `src/context/PlaylistsContext.tsx`; `src/services/playlistsStorage.ts` |
 | Playback | `src/context/PlayerContext.tsx`, `src/services/playerQueue.ts`, `src/components/player/` |
 | Local data / backups | `src/services/api.ts`, `notesStorage.ts`, `dataBackup.ts`; `src/components/DataModal.tsx` |
 
 ## Verification and handoff
 
-Latest code validation: TypeScript, all **89 service tests**, production build and whitespace checks passed. Sharing browser checks passed in StrictMode; desktop and 390 px toast layouts were visually checked. Vite still reports the >500 kB chunk advisory. This rewrite changes documentation only.
+Latest code validation: TypeScript, all **93 service tests**, production build and whitespace checks passed. New production browser checks cover repeated failures, keyboard Retry, complete results, no-match distinction, deferred dialogs/focus, exact-ID media and `/anime_db/`. Existing sharing, catalog URL, player queue and collection ordering fixtures pass in StrictMode. The 390 px recovery layout was visually checked. Vite still reports the >500 kB chunk advisory (initial JS 500.89 kB).
 
-Performance baseline: catalog is about **17.4 MB (16.6 MiB) uncompressed**. Existing code caches normalized text and the last eight ordered result sets, reusing them for pagination. Profile before adding another cache/index.
+Performance: canonical catalog remains **17.4 MB**, but the generated client payload is **8.25 MB** raw / **1.84 MB** gzip (gzip reduction 8.4%). Five fresh local browser runs measured median first rows at **265 ms**, down from **377 ms**; this is not a production-network guarantee. Existing normalized-text and eight-query caches remain unchanged. See the performance report for parsing, rendering, candidate index measurements and reproduction commands.
 
 For code changes: `npm.cmd run lint`, `npm.cmd test`, `npm.cmd run build`, `git diff --check`, plus relevant browser checks. Fixtures: `/tests/song-sharing.html`, `/tests/catalog-url.html`, `/tests/player-queue.html`, `/tests/collection-order.html`. Preserve the user's normal browser data. For documentation-only edits, review the diff and run the whitespace check.
 
 Useful regressions: Heike matches only `song-34830`/`song-34831`; legitimate IKE/SPYAIR aliases work; accented/unaccented fhána matches agree; pagination reaches results beyond 500; sharing/filtering preserve playback.
 
-Latest local server: `http://127.0.0.1:5173/`; check it is running before use. Production uses `/anime_db/`. Check Git/deployment status rather than assuming local edits are published.
+Browser runners: `node tests/catalog-loading.mjs` and `node tests/browser-fixtures.mjs` use temporary local servers and isolated storage. No persistent dev server was left running by this pass. Production uses `/anime_db/`. Changes are local and have not been published.

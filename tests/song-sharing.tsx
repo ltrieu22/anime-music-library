@@ -1,6 +1,7 @@
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from '../src/App';
+import { packCatalog } from '../src/services/catalogPayload';
 import { LOCAL_STORAGE_KEY } from '../src/services/api';
 import { PLAYER_VOLUME_STORAGE_KEY } from '../src/services/playerVolume';
 import '../src/index.css';
@@ -16,7 +17,7 @@ const catalog = [
   { id: 'song-34831', anime_name: 'Heike', anime_year: 2021, song_name: 'Audio Song', artist: 'Artist', theme_type: 'ED 1', audio_url: 'fixture.mp3' },
   { id: 'song-34832', anime_name: 'Heike', anime_year: 2021, song_name: 'Missing Media', artist: 'Artist', theme_type: 'ED 2' },
 ];
-window.fetch = async input => new Response(JSON.stringify(String(input).includes('anime_catalog.json') ? catalog : {}), { headers: { 'Content-Type': 'application/json' } });
+window.fetch = async input => new Response(JSON.stringify(String(input).includes('catalog.compact.json') ? packCatalog(catalog) : {}), { headers: { 'Content-Type': 'application/json' } });
 let blocked = true;
 let sourceWrites = 0;
 let source = '';

@@ -4,6 +4,7 @@ import { before, test } from 'node:test';
 import type { AnimeSongItem } from '../types';
 import { loadStaticCatalog, searchStaticCatalog } from './catalogEngine';
 import { createCatalogQueryMatcher } from './catalogSearch';
+import { packCatalog } from './catalogPayload';
 
 const readData = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const catalog: AnimeSongItem[] = readData('../../public/data/anime_catalog.json');
@@ -35,8 +36,8 @@ before(async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = String(input);
-    assert.ok(url.endsWith('data/anime_catalog.json') || url.endsWith('data/artist_aliases.json'));
-    return Response.json(url.endsWith('data/anime_catalog.json') ? catalog : aliases);
+    assert.ok(url.endsWith('data/catalog.compact.json') || url.endsWith('data/artist_aliases.json'));
+    return Response.json(url.endsWith('data/catalog.compact.json') ? packCatalog(catalog) : aliases);
   };
   try {
     await loadStaticCatalog();

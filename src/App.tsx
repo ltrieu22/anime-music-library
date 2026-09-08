@@ -3,20 +3,15 @@ import { SharedSongLink } from './components/SharedSongLink';
 import { CATALOG_MIN_YEAR, CATALOG_MAX_YEAR } from './services/catalogUrlState';
 import { useCatalogSearchState } from './services/useCatalogSearchState';
 import { compareAnimeSeason, copyAnimeSeasonMetadata, getAnimeSeason, matchesAnimeSeason } from './services/animeSeason';
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
 import { PlaylistsProvider, usePlaylists } from './context/PlaylistsContext';
 import { persistBackupImport, type BackupImport } from './services/dataBackup';
-import { PlaylistSongPicker } from './components/collection/PlaylistSongPicker';
 import { PlaylistDetail } from './components/collection/PlaylistDetail';
 import { createSongReference, type PlaylistSongReference } from './services/playlistsStorage';
 import { Header } from './components/Header';
 import { FilterBar } from './components/FilterBar';
 import { SongTable } from './components/SongTable';
-import { AddSongModal } from './components/AddSongModal';
-import { EditSongModal } from './components/EditSongModal';
-import { DataModal } from './components/DataModal';
-import { NoteModal } from './components/NoteModal';
 import {
   AnimeSongEntry,
   AnimeSongItem,
@@ -62,6 +57,18 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 type NoteableSong = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
 
 const CATALOG_PAGE_SIZE = 100;
+const AddSongModal = lazy(() => import('./components/AddSongModal').then(module => ({ default: module.AddSongModal })));
+const EditSongModal = lazy(() => import('./components/EditSongModal').then(module => ({ default: module.EditSongModal })));
+const DataModal = lazy(() => import('./components/DataModal').then(module => ({ default: module.DataModal })));
+const NoteModal = lazy(() => import('./components/NoteModal').then(module => ({ default: module.NoteModal })));
+const PlaylistSongPicker = lazy(() => import('./components/collection/PlaylistSongPicker').then(module => ({ default: module.PlaylistSongPicker })));
+
+/** Defer the first download, then preserve the dialog's existing draft/state behavior. */
+function DeferredDialog({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const [visited, setVisited] = useState(open);
+  useEffect(() => { if (open) setVisited(true); }, [open]);
+  return open || visited ? <Suspense fallback={<div role="status" className="fixed bottom-24 left-1/2 -translate-x-1/2 rounded-lg bg-neutral-900 p-3 text-sm text-neutral-200">Loading dialog…</div>}>{children}</Suspense> : null;
+}
 
 function sortSongItems<T extends NoteableSong>(
   items: T[],
@@ -117,6 +124,8 @@ function MainApp() {
   const [aniSongDbTotal, setAniSongDbTotal] = useState(0);
   const [loadedCatalogKey, setLoadedCatalogKey] = useState('');
   const [catalogOffset, setCatalogOffset] = useState(0);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
 
   // Fallback catalog lookup map for collection songs missing video_url
   const [catalogLookupMap, setCatalogLookupMap] = useState<Map<string, AnimeSongItem>>(new Map());
@@ -503,6 +512,7 @@ function MainApp() {
     if (!isCatalogMode) return;
     let current = true;
     setIsLoadingAniSongDb(true);
+    setCatalogError('');
     // Do not fetch intermediate pages while the typed query is still debouncing.
     if (searchQuery !== debouncedSearch) return;
     async function fetchPage() {
@@ -538,13 +548,13 @@ function MainApp() {
         setCatalogOffset(0);
         setLoadedCatalogKey(catalogRequestKey);
         setIsLoadingAniSongDb(false);
-        setToast({ message: 'Could not load these catalog results. Try the search again.', type: 'info' });
+        setCatalogError('Could not load these catalog results. Check your connection and try again.');
       }
     }
     fetchPage();
     return () => { current = false; };
   }, [isCatalogMode, catalogRequestKey, catalogQueryKey, catalogPage, searchQuery, debouncedSearch,
-    artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder, catalogNoteMatches]);
+    artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder, catalogNoteMatches, catalogAttempt]);
 
   const currentDisplayList = isCatalogMode
     ? anisongdbSongs
@@ -566,7 +576,7 @@ function MainApp() {
       : false;
 
   const catalogPageCount = Math.max(1, Math.ceil(aniSongDbTotal / CATALOG_PAGE_SIZE));
-  const catalogNavigation = isCatalogMode ? (
+  const catalogNavigation = isCatalogMode && !catalogError ? (
     <nav aria-label="Catalog result pages" className="my-4 flex flex-wrap items-center justify-between gap-2">
       <span role="status" className="text-xs text-neutral-400">
         {isLoading ? 'Loading results…' : aniSongDbTotal
@@ -643,6 +653,16 @@ function MainApp() {
               ? 'Searching catalog...'
               : 'Loading saved collection...'}
           </span>
+        </div>
+      ) : isCatalogMode && catalogError ? (
+        <div role="alert" className="bg-[#232628] border border-neutral-700 rounded-xl p-8 text-center flex flex-col items-center gap-3">
+          <AlertCircle className="h-7 w-7 text-amber-400" aria-hidden="true" />
+          <h2 className="font-semibold text-neutral-100">Catalog unavailable</h2>
+          <p className="text-sm text-neutral-400">{catalogError}</p>
+          <button type="button" onClick={() => { setIsLoadingAniSongDb(true); setCatalogAttempt(attempt => attempt + 1); }}
+            className="min-h-11 rounded-lg bg-emerald-500 px-5 py-2 font-medium text-neutral-950 hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 cursor-pointer">
+            Retry
+          </button>
         </div>
       ) : (
         <SongTable
@@ -742,40 +762,50 @@ function MainApp() {
         </footer>
       </main>
 
-      {playlistSong && <PlaylistSongPicker song={playlistSong} onClose={() => setPlaylistSong(null)} />}
+      <DeferredDialog open={Boolean(playlistSong)}>
+        {playlistSong && <PlaylistSongPicker song={playlistSong} onClose={() => setPlaylistSong(null)} />}
+      </DeferredDialog>
 
-      <NoteModal
-        isOpen={Boolean(activeNoteSong)}
-        song={activeNoteSong}
-        note={activeNoteSong ? findNoteForSong(notes, activeNoteSong) : undefined}
-        onClose={() => setActiveNoteSong(null)}
-        onSave={handleSaveNote}
-        onClear={handleClearNote}
-      />
+      <DeferredDialog open={Boolean(activeNoteSong)}>
+        <NoteModal
+          isOpen={Boolean(activeNoteSong)}
+          song={activeNoteSong}
+          note={activeNoteSong ? findNoteForSong(notes, activeNoteSong) : undefined}
+          onClose={() => setActiveNoteSong(null)}
+          onSave={handleSaveNote}
+          onClear={handleClearNote}
+        />
+      </DeferredDialog>
 
       {/* Add / Edit / Manage Modals */}
-      <AddSongModal
-        isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-        onAddSong={handleAddSong}
-      />
+      <DeferredDialog open={isAddOpen}>
+        <AddSongModal
+          isOpen={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          onAddSong={handleAddSong}
+        />
+      </DeferredDialog>
 
-      <EditSongModal
-        isOpen={Boolean(editingEntry)}
-        entry={editingEntry}
-        onClose={() => setEditingEntry(null)}
-        onSave={handleEditSave}
-      />
+      <DeferredDialog open={Boolean(editingEntry)}>
+        <EditSongModal
+          isOpen={Boolean(editingEntry)}
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onSave={handleEditSave}
+        />
+      </DeferredDialog>
 
-      <DataModal
-        isOpen={isDataOpen}
-        onClose={() => setIsDataOpen(false)}
-        entries={collectionEntries}
-        notes={notes}
-        onImportData={handleImportData}
-        onResetToDefault={handleReset}
-        onClearNotes={handleClearAllNotes}
-      />
+      <DeferredDialog open={isDataOpen}>
+        <DataModal
+          isOpen={isDataOpen}
+          onClose={() => setIsDataOpen(false)}
+          entries={collectionEntries}
+          notes={notes}
+          onImportData={handleImportData}
+          onResetToDefault={handleReset}
+          onClearNotes={handleClearAllNotes}
+        />
+      </DeferredDialog>
 
       {/* Toast Notification */}
       {toast && (

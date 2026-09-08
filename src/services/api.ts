@@ -1,17 +1,10 @@
 import { AnimeSongEntry, AnimeSearchResult } from '../types';
-import { searchStaticCatalog, loadStaticCatalog } from './catalogEngine';
+import { searchStaticCatalog } from './catalogEngine';
 import { getCachedCover, rememberCover } from './coverCache';
 import { reorderSongSubset } from './songOrder';
 
 export const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
 let isServerApiAvailable: boolean | null = null;
-
-// Pre-warm static catalog in background
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    loadStaticCatalog().catch(() => {});
-  }, 100);
-}
 
 // Synchronize local cache with localStorage
 export function getLocalEntries(): AnimeSongEntry[] {

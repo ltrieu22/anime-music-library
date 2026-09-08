@@ -2,7 +2,7 @@ import { resolveAnimeSeason } from '../services/animeSeason';
 import type { AnimeSongItem } from '../types';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { getAnimeDisplayTitle, getSearchableAnimeTitles, readTitleLanguage, resolveAnimeTitles, TITLE_LANGUAGE_STORAGE_KEY, type TitleLanguage, type TitleSource } from '../services/animeTitles';
-import { loadStaticCatalog } from '../services/catalogEngine';
+import { loadStaticCatalog, subscribeStaticCatalog } from '../services/catalogEngine';
 
 const TitleLanguageContext = createContext<{
   resolveSeason: <T extends Partial<AnimeSongItem>>(song: T) => T;
@@ -18,10 +18,11 @@ export function TitleLanguageProvider({ children }: { children: React.ReactNode 
   const [storageError, setStorageError] = useState(false);
   const [catalog, setCatalog] = useState<ReadonlyMap<string, AnimeSongItem>>(new Map());
   useEffect(() => {
-    let active = true;
-    loadStaticCatalog().then(([songs]) => {
-      if (active) setCatalog(new Map(songs.map((song) => [String(song.id), song])));
+    const unsubscribe = subscribeStaticCatalog(([songs]) => {
+      setCatalog(new Map(songs.map((song) => [String(song.id), song])));
     });
+    // The results view owns the error/Retry UI; keep listening for a successful retry.
+    void loadStaticCatalog().catch(() => {});
     const sync = (event: StorageEvent) => {
       if (event.key === TITLE_LANGUAGE_STORAGE_KEY || event.key === null) {
         updateLanguage(readTitleLanguage());
@@ -29,7 +30,7 @@ export function TitleLanguageProvider({ children }: { children: React.ReactNode 
       }
     };
     window.addEventListener('storage', sync);
-    return () => { active = false; window.removeEventListener('storage', sync); };
+    return () => { unsubscribe(); window.removeEventListener('storage', sync); };
   }, []);
   const setLanguage = useCallback((next: TitleLanguage) => {
     updateLanguage(next);

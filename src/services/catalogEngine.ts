@@ -1,9 +1,9 @@
 import { AnimeSongItem } from '../types';
 import { compileCatalogResults, paginateCatalogResults, type CatalogParams } from './catalogResults';
+import { createCatalogLoader } from './catalogLoader';
 
-let cachedCatalog: AnimeSongItem[] | null = null;
-let cachedAliases: Record<string, string[]> | null = null;
-let loadPromise: Promise<[AnimeSongItem[], Record<string, string[]>]> | null = null;
+const loader = createCatalogLoader(getBaseUrl);
+export const subscribeStaticCatalog = loader.subscribe;
 const searchCache = new Map<string, AnimeSongItem[]>();
 
 /**
@@ -19,44 +19,7 @@ function getBaseUrl(): string {
  * Load catalog and artist aliases from static public files
  */
 export async function loadStaticCatalog(): Promise<[AnimeSongItem[], Record<string, string[]>]> {
-  if (cachedCatalog && cachedAliases) {
-    return [cachedCatalog, cachedAliases];
-  }
-
-  if (loadPromise) {
-    return loadPromise;
-  }
-
-  loadPromise = (async () => {
-    const base = getBaseUrl();
-    try {
-      const [catalogRes, aliasesRes] = await Promise.all([
-        fetch(`${base}data/anime_catalog.json`),
-        fetch(`${base}data/artist_aliases.json`),
-      ]);
-
-      if (!catalogRes.ok) {
-        throw new Error(`Failed to load anime_catalog.json: ${catalogRes.statusText}`);
-      }
-
-      const catalogData = await catalogRes.json();
-      const aliasesData = aliasesRes.ok ? await aliasesRes.json() : {};
-
-      cachedCatalog = catalogData;
-      cachedAliases = aliasesData;
-      return [catalogData, aliasesData];
-    } catch (err) {
-      console.warn('Error loading static catalog:', err);
-      // Fallback to empty if failed
-      cachedCatalog = cachedCatalog || [];
-      cachedAliases = cachedAliases || {};
-      return [cachedCatalog, cachedAliases];
-    } finally {
-      loadPromise = null;
-    }
-  })();
-
-  return loadPromise;
+  return loader.load();
 }
 
 /**
