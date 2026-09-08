@@ -27,6 +27,7 @@ import {
 import {
   ensureLocalSongIdentity,
   fetchEntries,
+  reorderSavedSongs,
   createEntry,
   updateEntry,
   deleteEntry,
@@ -317,6 +318,8 @@ function MainApp() {
       return matchesSearch && matchesYear && matchesAnimeSeason(item, seasonFilter);
     });
 
+    // The # column represents saved order, independent of stable song IDs.
+    if (sortKey === 'id') return sortOrder === 'asc' ? filtered : filtered.reverse();
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
     return filtered.sort((a, b) => {
       if (sortKey === 'anime_year') {
@@ -702,6 +705,16 @@ function MainApp() {
           isNotesMode={mode === 'notes'}
           tracksMap={mode === 'collection' ? collectionTracksMap : undefined}
           allTracks={mode === 'collection' ? collectionTracks : undefined}
+          onReorder={mode === 'collection' ? (songs) => {
+            try {
+              const entries = reorderSavedSongs(songs.map(song => Number(song.id)));
+              setCollectionEntries(entries);
+              setSortsByMode(previous => ({ ...previous, collection: { key: 'id', order: 'asc' } }));
+            } catch (cause) {
+              showToast(cause instanceof Error ? cause.message : 'Could not save song order.', 'info');
+              throw cause;
+            }
+          } : undefined}
         />
       )}
       {catalogNavigation}

@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUp, ArrowDown, Trash2, Play, Shuffle } from 'lucide-react';
+import { Trash2, Play, Shuffle } from 'lucide-react';
 import { SongTable, type SongMenuAction } from '../SongTable';
 import { RemoveSongModal } from '../RemoveSongModal';
 import { usePlayer } from '../../context/PlayerContext';
 import { usePlaylists } from '../../context/PlaylistsContext';
-import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { loadStaticCatalog } from '../../services/catalogEngine';
 import { resolvePlaylistSong, songReferenceKey, type CustomPlaylist } from '../../services/playlistsStorage';
 import { toSongTrack } from '../../utils/player';
@@ -22,7 +21,6 @@ export function PlaylistDetail({ playlist, notes, onEditNote, onAddToPlaylist, i
 }) {
   const { change, error: storageError } = usePlaylists();
   const { playQueue } = usePlayer();
-  const { displayTitle } = useTitleLanguage();
   const [catalog, setCatalog] = useState<AnimeSongItem[]>([]);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -54,7 +52,7 @@ export function PlaylistDetail({ playlist, notes, onEditNote, onAddToPlaylist, i
   return <div>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       <div><h2 id="playlist-detail-heading" tabIndex={-1} className="text-sm font-semibold outline-none">{rows.length} song{rows.length === 1 ? '' : 's'} · Playlist order</h2>
-        <p className="mt-1 text-xs text-neutral-400">Use the arrows to reorder. Changes apply when you start this playlist again.</p>
+        <p className="mt-1 text-xs text-neutral-400">Drag songs to reorder, or focus a row and use Alt + ↑ / ↓. Changes apply when you start this playlist again.</p>
         {tracks.length < rows.length && <p className="mt-1 text-xs text-amber-300">{rows.length - tracks.length} song(s) have no playable media and will be skipped.</p>}
       </div>
       <div className="flex flex-wrap gap-2"><button disabled={!tracks.length} onClick={() => playQueue(tracks)} className={`${button} bg-emerald-400 font-semibold text-neutral-950`}><Play aria-hidden="true" className="h-4 w-4" />Play Playlist</button><button disabled={!tracks.length} onClick={shuffle} className={`${button} bg-neutral-800`}><Shuffle aria-hidden="true" className="h-4 w-4" />Shuffle</button></div>
@@ -73,44 +71,23 @@ export function PlaylistDetail({ playlist, notes, onEditNote, onAddToPlaylist, i
         onAddToPlaylist={onAddToPlaylist}
         isSongSaved={isSongSaved}
         onToggleSaved={onToggleSaved}
+        onReorder={storageError ? undefined : (songs) => {
+          try {
+            change({ type: 'reorderSongs', id: playlist.id, songKeys: songs.map(song => rows.find(row => row.song === song)!.key) });
+            setError('');
+            setStatus('Playlist order saved.');
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'Could not reorder songs.');
+            throw cause;
+          }
+        }}
         playlistView={{
           getTrack: (song) => rows.find((row) => row.song === song)?.track ?? null,
           play,
           rowKey: (index) => rows[index].key,
           menuActions: (index) => {
             const row = rows[index];
-            const name = row.song.song_name || displayTitle(row.song);
             const actions: SongMenuAction[] = [
-              {
-                id: 'move-up',
-                label: 'Move up',
-                icon: ArrowUp,
-                disabled: Boolean(storageError) || index === 0,
-                onSelect: () => {
-                  try {
-                    change({ type: 'moveSong', id: playlist.id, songKey: row.key, direction: -1 });
-                    setError('');
-                    setStatus(`${name} moved up.`);
-                  } catch (cause) {
-                    setError(cause instanceof Error ? cause.message : 'Could not reorder songs.');
-                  }
-                },
-              },
-              {
-                id: 'move-down',
-                label: 'Move down',
-                icon: ArrowDown,
-                disabled: Boolean(storageError) || index === rows.length - 1,
-                onSelect: () => {
-                  try {
-                    change({ type: 'moveSong', id: playlist.id, songKey: row.key, direction: 1 });
-                    setError('');
-                    setStatus(`${name} moved down.`);
-                  } catch (cause) {
-                    setError(cause instanceof Error ? cause.message : 'Could not reorder songs.');
-                  }
-                },
-              },
               {
                 id: 'remove-from-playlist',
                 label: 'Remove from playlist',

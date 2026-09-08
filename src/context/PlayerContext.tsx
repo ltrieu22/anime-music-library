@@ -11,6 +11,7 @@ import React, {
 import { QueueItem, QueueSource, SongTrack } from '../types/player';
 import { canAdvanceQueue, currentQueueItem, initialQueueState, queueReducer } from '../services/playerQueue';
 import { readStoredPlayerVolume, sanitizePlayerVolume, writeStoredPlayerVolume } from '../services/playerVolume';
+import { fetchAnimeCoverUrl } from '../services/api';
 
 // Debounce for volume persistence so slider drags settle before storage writes.
 const VOLUME_PERSIST_DELAY_MS = 150;
@@ -68,6 +69,26 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [queueState, dispatchQueue] = useReducer(queueReducer, initialQueueState);
   const activeItem = currentQueueItem(queueState);
   const currentTrack = activeItem?.track ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    // Warm a bounded window even while the queue panel is closed. Serial
+    // lookups avoid flooding the provider when a large playlist is started.
+    const warmCovers = async () => {
+      for (const { track } of queueState.items.slice(queueState.index, queueState.index + 7)) {
+        if (cancelled) break;
+        try {
+          const url = track.image || await fetchAnimeCoverUrl(track.animeTitle, track.anilistId);
+          if (cancelled) break;
+          if (url) {
+            const image = new Image();
+            image.src = url;
+          }
+        } catch { /* Artwork must not interrupt playback. */ }
+      }
+    };
+    void warmCovers();
+    return () => { cancelled = true; };
+  }, [queueState.items, queueState.index]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);

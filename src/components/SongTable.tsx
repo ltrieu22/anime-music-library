@@ -4,6 +4,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import {
   ListPlus,
+  GripVertical,
   ListEnd,
   NotebookPen,
   Heart,
@@ -29,6 +30,7 @@ import { usePlayer } from '../context/PlayerContext';
 import { toSongTrack } from '../utils/player';
 import { ThemeBadge } from './ThemeBadge';
 import { findSearchMatchRanges } from '../services/searchText';
+import { SortableSongRow, SortableSongRows } from './collection/SortableSongRows';
 
 type SongRowItem = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
 
@@ -69,6 +71,7 @@ interface SongTableProps {
   tracksMap?: Map<string | number, SongTrack>;
   allTracks?: SongTrack[];
   onAddToPlaylist?: (song: SongRowItem) => void;
+  onReorder?: (songs: SongRowItem[]) => void;
   playlistView?: {
     getTrack: (song: SongRowItem) => SongTrack | null;
     play: (song: SongRowItem) => void;
@@ -114,6 +117,7 @@ export const SongTable: React.FC<SongTableProps> = ({
   allTracks,
   onAddToPlaylist,
   playlistView,
+  onReorder,
 }) => {
   const { resolveSeason, displayTitle } = useTitleLanguage();
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
@@ -122,6 +126,17 @@ export const SongTable: React.FC<SongTableProps> = ({
   const [pendingSaveKeys, setPendingSaveKeys] = React.useState<Set<string>>(() => new Set());
   const [menuAnnouncement, setMenuAnnouncement] = React.useState('');
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const rowKeys = entries.map((item, index) => playlistView?.rowKey(index) ?? `${getSongNoteKey(item)}:${String(item.id)}`);
+  const reorderRows = onReorder ? (keys: string[]) => {
+    setOpenMenu(null);
+    const byKey = new Map(rowKeys.map((key, index) => [key, entries[index]]));
+    try {
+      onReorder(keys.map(key => byKey.get(key)!));
+      setMenuAnnouncement('Song order updated.');
+    } catch {
+      setMenuAnnouncement('Song order could not be saved.');
+    }
+  } : undefined;
 
   // Safe highlight helper
   const highlightText = (text: string | number | undefined, query: string) => {
@@ -580,20 +595,23 @@ export const SongTable: React.FC<SongTableProps> = ({
               <th className="py-3 px-4 w-28 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-800/80 text-sm">
+          <SortableSongRows as="tbody" values={rowKeys} onReorder={reorderRows} className="divide-y divide-neutral-800/80 text-sm">
             {entries.map((item, index) => {
               const note = findNoteForSong(notes, item);
               const hasNote = Boolean(note?.text.trim());
               const rowKey = playlistView?.rowKey(index) ?? `${getSongNoteKey(item)}:${String(item.id)}`;
 
               return (
-                <tr
+                <SortableSongRow as="tr" rowKey={rowKey}
                   key={rowKey}
                   onContextMenu={(event) => openContextMenu(event, item, index, rowKey)}
                   className="hover:bg-neutral-800/40 transition-colors group"
                 >
                   <td className="py-3 px-4 text-xs font-mono text-neutral-500">
-                    {!playlistView && typeof item.id === 'number' ? item.id : rowOffset + index + 1}
+                    <span data-song-drag-handle={onReorder ? '' : undefined} style={onReorder ? { touchAction: 'none' } : undefined} title={onReorder ? 'Drag to reorder' : undefined} className="inline-flex items-center gap-1.5">
+                      {onReorder && <GripVertical aria-hidden="true" className="h-4 w-4 shrink-0" />}
+                      <span data-song-number>{rowOffset + index + 1}</span>
+                    </span>
                   </td>
 
                   {/* Anime Name with Hover Poster Card & Direct AniList Link */}
@@ -671,10 +689,10 @@ export const SongTable: React.FC<SongTableProps> = ({
                   <td className="py-3 px-4 text-right">
                     {renderRowActions(item, index, rowKey)}
                   </td>
-                </tr>
+                </SortableSongRow>
               );
             })}
-          </tbody>
+          </SortableSongRows>
         </table>
       </div>
 
@@ -705,22 +723,23 @@ export const SongTable: React.FC<SongTableProps> = ({
           </button>
         </div>}
 
-        <div className="divide-y divide-neutral-800">
+        <SortableSongRows as="div" values={rowKeys} onReorder={reorderRows} className="divide-y divide-neutral-800">
           {entries.map((item, index) => {
           const note = findNoteForSong(notes, item);
           const hasNote = Boolean(note?.text.trim());
           const rowKey = playlistView?.rowKey(index) ?? `${getSongNoteKey(item)}:${String(item.id)}`;
 
           return (
-            <div
+            <SortableSongRow as="div" rowKey={rowKey}
               key={rowKey}
               onContextMenu={(event) => openContextMenu(event, item, index, rowKey)}
               className="p-4 space-y-2.5"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-mono text-neutral-500 mr-2">
-                    #{!playlistView && typeof item.id === 'number' ? item.id : rowOffset + index + 1}
+                  <span data-song-drag-handle={onReorder ? '' : undefined} style={onReorder ? { touchAction: 'none' } : undefined} title={onReorder ? 'Drag to reorder' : undefined} className="text-[11px] font-mono text-neutral-500 mr-2">
+                    {onReorder && <GripVertical aria-hidden="true" className="mr-1 inline h-4 w-4" />}
+                    #<span data-song-number>{rowOffset + index + 1}</span>
                   </span>
                   <AnimeHoverCard
                     animeName={item.anime_name}
@@ -783,10 +802,10 @@ export const SongTable: React.FC<SongTableProps> = ({
 
                 {renderRowActions(item, index, rowKey)}
               </div>
-            </div>
+            </SortableSongRow>
           );
         })}
-        </div>
+        </SortableSongRows>
       </div>
       {renderOpenMenu()}
       <span role="status" aria-live="polite" className="sr-only">{menuAnnouncement}</span>

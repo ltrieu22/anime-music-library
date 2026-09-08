@@ -72,3 +72,15 @@
   transform: scale(1.22);
   background: #059669;
 }
+
+/* Keep the action slot stable when duration gives way to removal. */
+.queue-row-delete { opacity: 0; pointer-events: none; }
+.queue-row:hover .queue-row-delete,
+.queue-row:focus-within .queue-row-delete { opacity: 1; pointer-events: auto; }
+.queue-row:hover .queue-row-duration,
+.queue-row:focus-within .queue-row-duration { visibility: hidden; }
+@media (hover: none) {
+  .queue-row-delete { position: static; opacity: 1; pointer-events: auto; }
+  .queue-row-duration { position: absolute; bottom: -0.625rem; }
+  .queue-row:focus-within .queue-row-duration { visibility: visible; }
+}

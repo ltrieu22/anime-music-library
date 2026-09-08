@@ -1,5 +1,6 @@
 import type { AnimeSongEntry, AnimeSongItem, NoteSongSnapshot } from '../types';
 import { createNoteSongSnapshot } from './notesStorage';
+import { reorderSongSubset } from './songOrder';
 
 export const PLAYLISTS_STORAGE_KEY = 'anime-db:playlists';
 export const SAVED_SONGS_ID = 'saved-songs';
@@ -117,6 +118,7 @@ export type PlaylistChange =
   | { type: 'delete'; id: string }
   | { type: 'addSong'; id: string; song: PlaylistSongReference }
   | { type: 'removeSong'; id: string; songKey: string }
+  | { type: 'reorderSongs'; id: string; songKeys: string[] }
   | { type: 'moveSong'; id: string; songKey: string; direction: -1 | 1 };
 
 export function changePlaylists(change: PlaylistChange, storage: StorageAccess = localStorage): CustomPlaylist[] {
@@ -136,6 +138,9 @@ export function changePlaylists(change: PlaylistChange, storage: StorageAccess =
     } else {
       next = lists.map((list) => {
         if (list.id !== change.id) return list;
+        if (change.type === 'reorderSongs') {
+          return { ...list, songs: reorderSongSubset<PlaylistSongReference>(list.songs, change.songKeys, songReferenceKey) };
+        }
         if (change.type === 'addSong') {
           if (!isSongReference(change.song)) throw new Error('This song could not be added.');
           if (list.songs.some((song) => songReferenceKey(song) === songReferenceKey(change.song))) return list;

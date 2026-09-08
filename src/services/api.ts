@@ -1,5 +1,7 @@
 import { AnimeSongEntry, AnimeSearchResult } from '../types';
 import { searchStaticCatalog, loadStaticCatalog } from './catalogEngine';
+import { getCachedCover, rememberCover } from './coverCache';
+import { reorderSongSubset } from './songOrder';
 
 export const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
 let isServerApiAvailable: boolean | null = null;
@@ -45,6 +47,13 @@ export function clearLocalEntries(): void {
 
 export async function fetchEntries(): Promise<AnimeSongEntry[]> {
   return getLocalEntries();
+}
+
+export function reorderSavedSongs(ids: number[]): AnimeSongEntry[] {
+  // Read fresh data and let failed writes surface before changing the UI.
+  const entries = reorderSongSubset(getLocalEntries(), ids.map(String), entry => String(entry.id));
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(entries));
+  return entries;
 }
 
 /** Lazily identify legacy manual songs without changing saved numbers or notes. */
@@ -154,7 +163,33 @@ export async function searchAnime(query: string): Promise<AnimeSearchResult[]> {
 }
 
 // Fetch Anime Cover & Details (Server API + AniList GraphQL + Kitsu fallback)
-export async function fetchAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
+const animeCoverRequests = new Map<string, ReturnType<typeof loadAnimeCoverDetails>>();
+
+export function fetchAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
+  const key = anilistId ? `id:${anilistId}` : `title:${animeTitle.trim().toLowerCase()}`;
+  const cached = animeCoverRequests.get(key);
+  if (cached) return cached;
+  const request = loadAnimeCoverDetails(animeTitle, anilistId).then(details => {
+    // Allow a later attempt when the provider is temporarily unavailable.
+    if (!details.coverImage) animeCoverRequests.delete(key);
+    else rememberCover(animeTitle, anilistId, details.coverImage);
+    return details;
+  }).catch(error => {
+    animeCoverRequests.delete(key);
+    throw error;
+  });
+  animeCoverRequests.set(key, request);
+  return request;
+}
+
+export async function fetchAnimeCoverUrl(animeTitle: string, anilistId?: number | null): Promise<string | null> {
+  const cached = getCachedCover(animeTitle, anilistId);
+  if (cached) return cached;
+  const details = await fetchAnimeCoverDetails(animeTitle, anilistId);
+  return details.coverImage || null;
+}
+
+async function loadAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
   if (isServerApiAvailable !== false) {
     try {
       const params = new URLSearchParams();

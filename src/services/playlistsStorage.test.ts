@@ -8,6 +8,21 @@ function memoryStorage() {
   return { data, getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
 }
 
+test('drag order persists exact song references and leaves other playlists intact', () => {
+  const storage = memoryStorage();
+  const [list] = changePlaylists({ type: 'create', name: 'Drag test' }, storage);
+  for (let i = 1; i <= 5; i++) changePlaylists({ type: 'addSong', id: list.id, song: { source: 'anisongdb', songId: String(i) } }, storage);
+  const other = changePlaylists({ type: 'create', name: 'Unrelated' }, storage)[1];
+  const keys = ['1', '5', '2', '3', '4'].map(songId => songReferenceKey({ source: 'anisongdb', songId }));
+  changePlaylists({ type: 'reorderSongs', id: list.id, songKeys: keys }, storage);
+  assert.deepEqual(loadPlaylists(storage)[0].songs.map(song => song.songId), ['1', '5', '2', '3', '4']);
+  assert.deepEqual(loadPlaylists(storage)[1], other);
+  const before = storage.getItem(PLAYLISTS_STORAGE_KEY);
+  assert.throws(() => changePlaylists({ type: 'reorderSongs', id: list.id, songKeys: [keys[0], keys[0]] }, storage));
+  assert.throws(() => changePlaylists({ type: 'reorderSongs', id: list.id, songKeys: keys.slice().reverse() }, { ...storage, setItem: () => { throw new Error(); } }));
+  assert.equal(storage.getItem(PLAYLISTS_STORAGE_KEY), before);
+});
+
 test('legacy browser starts with no custom lists; create, rename and delete persist without touching existing data', () => {
   const storage = memoryStorage();
   assert.deepEqual(loadPlaylists(storage), []);
