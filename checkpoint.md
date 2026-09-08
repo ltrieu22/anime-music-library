@@ -24,7 +24,7 @@ Batch numbers stay unchanged so earlier references remain meaningful. Work on on
 | 12–14 | Clickable artist cursors, player entrance animation and remembered master volume (40% default) |
 | 15–16 | Accent-insensitive search/highlighting and complete catalog pagination |
 | 17 | Season/year labels, basic season filter, chronological sorting and backward-compatible saved metadata |
-| 21 | Typed public search URLs, reload/Back/Forward restoration, debounced history replacement, filter/page history and private-tab isolation |
+| 21 | On-demand shareable catalog searches, clean routine URLs, reload/Back/Forward restoration through history state and private-tab isolation |
 | 22 | Share dialogs in song actions/player, stable public playback links, native share/copy/manual fallback, blocked-playback recovery and explicit link/media errors |
 
 These features are implemented; their old proposals, step-by-step histories, superseded next prompts, temporary QA ports and bundle filenames are no longer needed here. Do not repeat the completed catalog enrichment or browser-data cleanup.
@@ -54,10 +54,16 @@ These features are implemented; their old proposals, step-by-step histories, sup
 
 - `src/services/catalogUrlState.ts` owns `q`, `yearMin`, `yearMax`, `season`, `theme`, `artists`, `sort`, `order`, and `page`. Defaults are omitted: empty query, 1924–2026, ALL season/theme, no artists, anime_year descending, page 1. Pages are one-based in URLs and zero-based internally.
 - Seasons use Winter/Spring/Summer/Fall/UNKNOWN; themes use OP/ED/IN. Sort keys match the existing table. Invalid values fall back safely; reversed valid years are ordered; artist IDs are positive safe integers, deduplicated and sorted. Exact artist IDs take precedence over `q`; labels are never serialized and restored filters display the IDs.
-- URL writes preserve pathname, hash, unrelated parameters and the reserved `play` parameter. Batch 22 handles song-sharing playback independently of search state.
-- Typing replaces history after 200 ms. Deliberate filter/sort/page/reset changes push history; out-of-range page corrections replace. Back/Forward restores the public view and cancels pending typing without synchronization loops.
+- Routine typing and filter, sort and page changes remove catalog parameters from the address bar. An explicit **Share search** action generates a reviewable link containing the current public controls without navigating or changing playback; it omits `play` and preserves the deployment path, hash and unrelated parameters.
+- Shared search links still restore on open. Routine navigation stores validated catalog state in `history.state`: typing replaces after 200 ms, deliberate filter/sort/page/reset changes push, and out-of-range page corrections replace. Back/Forward and reload restore the view without exposing ordinary searches in the URL, and pending typing is canceled without synchronization loops.
 - Catalog, Saved Songs and Notes retain separate in-memory search/filter state. Private queries never transfer into public URL state when changing tabs. Stored note contents and library data are never serialized; local note matches still depend on the current browser's notes.
 - Browser regression harness: `/tests/catalog-url.html` on the Vite dev server. Click Run URL checks; it uses no browser storage and exercises the hook in React StrictMode.
+
+### Catalog loading performance
+
+- The canonical catalog is 16.6 MB uncompressed and about 1.9 MB with gzip, so the first visit still has a real download and JSON-parse cost. Local measurement was about 49 ms to parse the 38,821 rows.
+- Empty searches skip per-song text normalization. Season/year metadata is computed once per result compilation, normalized song text is cached on stable catalog objects, and the last eight filtered/sorted result sets are cached without their page offset. Page changes therefore reuse ordering rather than filtering and sorting all 38,821 songs again.
+- The Saved Songs playback-fallback index is built only after entering My Collection instead of during initial catalog display. These caches are memory-only and contain bundled public metadata; personal-note result merges continue to bypass the shared result cache.
 
 ### Public song links (batch 22)
 
@@ -68,6 +74,10 @@ These features are implemented; their old proposals, step-by-step histories, sup
 - Invalid IDs, missing catalog songs and absent media have visible errors. Playback failures show a notice above the player; blocked autoplay offers the existing Play control with remembered volume intact. Loading failures can be retried with Play; catalog loading failures instruct a reload.
 - The narrow-screen player uses two rows with a matching queue offset and page spacer to fit Share alongside existing controls.
 - Browser harness: `/tests/song-sharing.html` on Vite. It uses an in-memory library, fixture catalog and simulated media/native sharing/clipboard; it never sends a real share or modifies the user's stored library.
+
+### Browser identity
+
+- `index.html` uses the existing `public/marcille.png` as the PNG favicon. Vite resolves it at both `/marcille.png` in development and the configured GitHub Pages base path in production.
 
 ### Local data and backups
 
@@ -132,13 +142,13 @@ Not scheduled: Play next, extra repeat modes, queue restoration across restarts,
 
 ## Verification and latest handoff
 
-Last implementation validation recorded for **batch 22 (2026-09-08)**: TypeScript lint, **88/88 service tests**, production build and whitespace checks passed. Vite still reports its >500 kB chunk advisory.
+Last implementation validation recorded after the **batch 21 URL/privacy revision and catalog-loading optimization (2026-09-08)**: TypeScript lint, **89/89 service tests**, production build and whitespace checks passed. Vite still reports its >500 kB chunk advisory.
 
-The full-app sharing harness passed in StrictMode: links outside current filters/pages, no restarts on same-ID history/reset, blocked autoplay recovery, remembered volume, native success/cancel/failure, copy/manual fallback, selected link and focus restoration, row actions, audio-only playback, malformed/missing IDs, absent/failed media, saved-source identity and custom-song messaging. The existing queue harness passed **12 integration checks**, including occurrence identity, edits without media restart, wrapping/stopping and drag/keyboard behavior.
+The revised catalog URL harness passed in StrictMode: shared-link restoration, clean routine URLs, debounced internal history, Back/Forward, clean-URL reload, pending-query cancellation, explicit link generation, private-tab isolation, canonical artists, reset and preservation of unrelated URL/history state. The full-app batch 22 sharing harness still passed, including playback links and all native share/copy fallbacks.
 
-Production preview under `/anime_db/` opened `song-34830` with an empty library while filters returned no results. Actual media metadata loaded, autoplay was blocked with a visible Play prompt, Play resumed successfully, and playback was then paused. Copy produced a clean subpath link that reopened the intended song. The player and share dialog were visually checked at 320 px. Native share outcomes were simulated; no real OS share destination or physical phone was tested. User browser storage was not cleared or imported.
+Production preview under `/anime_db/` restored a Heike/Ending shared search, then kept the address clean after changing to Openings; Share search generated `/anime_db/?q=Heike&theme=OP` without changing the page. The favicon resolved to the existing `marcille.png` under the configured base path. A local cold-process benchmark improved default catalog result compilation from about **338 ms to 121 ms**; the first normalized text search may still take about 250 ms, while repeat normalized searches measured about 10 ms. Network time remains device/connection dependent.
 
-Batch 22 is complete. Stop before batch 23 unless requested. Existing queue and saved-list drag code/tests predate this batch; inspect them before implementing batch 23's remaining scope.
+Batches 21–22 remain complete with the revised on-demand sharing behavior. Stop before batch 23 unless requested. Existing queue and saved-list drag code/tests predate this work; inspect them before implementing batch 23's remaining scope.
 
 Useful regressions:
 

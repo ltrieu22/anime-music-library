@@ -26,10 +26,12 @@ test('shared songs resolve from the full catalog, including audio-only songs, wi
 });
 test('native sharing success and cancellation never write clipboard', async () => {
   let copies = 0;
+  let sharedTitle = '';
   const clipboard = { writeText: async () => { copies++; } };
   assert.equal(await shareSongLink('https://example.com/?play=song-1', {
-    clipboard, share: async data => { assert.equal(data.url, 'https://example.com/?play=song-1'); },
-  }), 'shared');
+    clipboard, share: async data => { assert.equal(data.url, 'https://example.com/?play=song-1'); sharedTitle = data.title || ''; },
+  }, false, 'Anime catalog search'), 'shared');
+  assert.equal(sharedTitle, 'Anime catalog search');
   assert.equal(await shareSongLink('link', { clipboard, share: async () => { throw new DOMException('Cancelled', 'AbortError'); } }), 'cancelled');
   assert.equal(copies, 0);
 });

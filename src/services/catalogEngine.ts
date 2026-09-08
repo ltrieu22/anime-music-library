@@ -1,9 +1,10 @@
 import { AnimeSongItem } from '../types';
-import { searchCatalogResults, type CatalogParams } from './catalogResults';
+import { compileCatalogResults, paginateCatalogResults, type CatalogParams } from './catalogResults';
 
 let cachedCatalog: AnimeSongItem[] | null = null;
 let cachedAliases: Record<string, string[]> | null = null;
 let loadPromise: Promise<[AnimeSongItem[], Record<string, string[]>]> | null = null;
+const searchCache = new Map<string, AnimeSongItem[]>();
 
 /**
  * Get base URL for static assets (handles GitHub Pages repo subpath)
@@ -63,5 +64,20 @@ export async function loadStaticCatalog(): Promise<[AnimeSongItem[], Record<stri
  */
 export async function searchStaticCatalog(params: CatalogParams, additionalMatches: AnimeSongItem[] = []) {
   const [catalog, aliases] = await loadStaticCatalog();
-  return searchCatalogResults(catalog, aliases, params, additionalMatches);
+  if (additionalMatches.length) {
+    return paginateCatalogResults(compileCatalogResults(catalog, aliases, params, additionalMatches), params);
+  }
+  const { offset: _offset, limit: _limit, ...query } = params;
+  const key = JSON.stringify(query);
+  let ordered = searchCache.get(key);
+  if (!ordered) {
+    ordered = compileCatalogResults(catalog, aliases, params);
+    searchCache.set(key, ordered);
+    if (searchCache.size > 8) searchCache.delete(searchCache.keys().next().value!);
+  } else {
+    // Refresh recency so repeated pagination retains this query in the small cache.
+    searchCache.delete(key);
+    searchCache.set(key, ordered);
+  }
+  return paginateCatalogResults(ordered, params);
 }

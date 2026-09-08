@@ -45,8 +45,7 @@ export function parseCatalogUrl(url: URL): CatalogUrlState {
 
 /** Only owns public search keys. In particular, preserve play, pathname and hash. */
 export function serializeCatalogUrl(state: CatalogUrlState, base: URL): URL {
-  const url = new URL(base.href);
-  for (const key of keys) url.searchParams.delete(key);
+  const url = stripCatalogUrl(base);
   const values = [state.artistIds.length ? '' : state.q, state.yearMin, state.yearMax, state.season,
     state.theme, [...new Set(state.artistIds)].sort((a, b) => a - b).join(','), state.sortKey, state.sortOrder, state.page + 1];
   const defaults = ['', CATALOG_MIN_YEAR, CATALOG_MAX_YEAR, 'ALL', 'ALL', '', 'anime_year', 'desc', 1];
@@ -54,4 +53,16 @@ export function serializeCatalogUrl(state: CatalogUrlState, base: URL): URL {
     if (value !== defaults[index]) url.searchParams.set(keys[index], String(value));
   });
   return url;
+}
+
+export function stripCatalogUrl(base: URL): URL {
+  const url = new URL(base.href);
+  for (const key of keys) url.searchParams.delete(key);
+  return url;
+}
+
+export function catalogSearchShareUrl(state: CatalogUrlState, base: URL): string {
+  const url = serializeCatalogUrl(state, base);
+  url.searchParams.delete('play');
+  return url.href;
 }

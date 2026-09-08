@@ -1,6 +1,6 @@
 import { ANIME_SEASONS } from '../services/animeSeason';
 import React from 'react';
-import { Search, X, RotateCcw, Calendar, UserRound } from 'lucide-react';
+import { Search, Share2, X, RotateCcw, Calendar, UserRound } from 'lucide-react';
 import { ActiveArtistFilter } from '../types';
 import { DualRangeSlider } from './DualRangeSlider';
 
@@ -22,6 +22,7 @@ interface FilterBarProps {
   placeholderText?: string;
   activeArtistFilter?: ActiveArtistFilter | null;
   onClearArtistFilter?: () => void;
+  onShareSearch?: () => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -42,6 +43,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   placeholderText = 'Search anime title, artist, or song name... (Press / to focus)',
   activeArtistFilter,
   onClearArtistFilter,
+  onShareSearch,
 }) => {
   const isFiltered =
     seasonFilter !== 'ALL' ||
@@ -130,6 +132,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             >
               <RotateCcw className="w-3 h-3" />
               <span>Reset</span>
+            </button>
+          )}
+          {onShareSearch && (
+            <button type="button" onClick={onShareSearch}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700/60 bg-neutral-800 px-2.5 py-1.5 text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-white"
+              aria-label="Share this catalog search">
+              <Share2 className="h-3.5 w-3.5" />
+              <span>Share search</span>
             </button>
           )}
         </div>

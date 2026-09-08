@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_CATALOG_STATE, parseCatalogUrl, serializeCatalogUrl } from './catalogUrlState';
+import { catalogSearchShareUrl, DEFAULT_CATALOG_STATE, parseCatalogUrl, serializeCatalogUrl } from './catalogUrlState';
 import { searchCatalogResults } from './catalogResults';
 import type { AnimeSongItem } from '../types';
 
@@ -19,6 +19,13 @@ test('defaults omitted; base path, unrelated repeated parameters, play and hash 
   assert.equal(result.href, 'https://example.com/anime_db/?play=song-34830&x=1&x=2#songs');
   assert.equal(base.searchParams.get('q'), 'old');
   assert.deepEqual(parseCatalogUrl(result), DEFAULT_CATALOG_STATE);
+});
+
+test('explicit search sharing omits playback without changing its input URL', () => {
+  const base = new URL('https://example.com/anime_db/?play=song-34830&extra=keep#songs');
+  const state = { ...DEFAULT_CATALOG_STATE, q: 'Heike', theme: 'OP', page: 2 };
+  assert.equal(catalogSearchShareUrl(state, base), 'https://example.com/anime_db/?extra=keep&q=Heike&theme=OP&page=3#songs');
+  assert.equal(base.searchParams.get('play'), 'song-34830');
 });
 
 test('malformed numbers and enums fall back; reversed years and artist lists normalize', () => {

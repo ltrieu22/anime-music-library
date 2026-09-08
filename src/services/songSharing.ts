@@ -28,10 +28,10 @@ type SharePlatform = {
   clipboard?: { writeText: (text: string) => Promise<void> };
 };
 export type ShareResult = 'shared' | 'cancelled' | 'copied' | 'manual';
-export async function shareSongLink(url: string, platform: SharePlatform, copyOnly = false): Promise<ShareResult> {
+export async function shareSongLink(url: string, platform: SharePlatform, copyOnly = false, title = 'Anime song'): Promise<ShareResult> {
   if (!copyOnly && platform.share) {
     try {
-      await platform.share({ title: 'Anime song', url });
+      await platform.share({ title, url });
       return 'shared';
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return 'cancelled';

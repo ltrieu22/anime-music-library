@@ -1,4 +1,4 @@
-import { SongShareProvider } from './context/SongShareContext';
+import { SongShareProvider, useSearchShare } from './context/SongShareContext';
 import { SharedSongLink } from './components/SharedSongLink';
 import { CATALOG_MIN_YEAR, CATALOG_MAX_YEAR } from './services/catalogUrlState';
 import { useCatalogSearchState } from './services/useCatalogSearchState';
@@ -100,6 +100,7 @@ function sortSongItems<T extends NoteableSong>(
 
 function MainApp() {
   const { closePlayer } = usePlayer();
+  const shareSearch = useSearchShare();
   const { refresh: refreshPlaylists } = usePlaylists();
   const { searchTitles, displayTitle, resolveSeason } = useTitleLanguage();
   // Database Mode: 'anisongdb' (38,800+ tracks) vs 'collection' (local private library)
@@ -121,6 +122,7 @@ function MainApp() {
   const [catalogLookupMap, setCatalogLookupMap] = useState<Map<string, AnimeSongItem>>(new Map());
 
   useEffect(() => {
+    if (mode !== 'collection' || catalogLookupMap.size > 0) return;
     loadStaticCatalog()
       .then(([catalog]) => {
         if (catalog && catalog.length > 0) {
@@ -136,7 +138,7 @@ function MainApp() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [mode, catalogLookupMap.size]);
 
   const { state: searchState, update: updateSearch, typeQuery, reset: resetSearch } = useCatalogSearchState(mode, setMode);
   const { draft: searchQuery, q: debouncedSearch, yearMin: selectedMinYear, yearMax: selectedMaxYear,
@@ -613,6 +615,7 @@ function MainApp() {
         onThemeTypeChange={isCatalogMode ? (theme) => updateSearch({ theme }) : undefined}
         activeArtistFilter={isCatalogMode ? activeArtistFilter : null}
         onClearArtistFilter={isCatalogMode ? () => updateSearch({ artistIds: [], artistLabel: undefined }) : undefined}
+        onShareSearch={isCatalogMode ? () => shareSearch(searchState) : undefined}
         placeholderText={
           isCatalogMode
             ? 'Search anime, artist, song title, or your notes... (Press / to focus)'

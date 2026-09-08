@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { catalogSearchShareUrl, type CatalogUrlState } from '../services/catalogUrlState';
 import { shareSongLink, songShareUrl, type ShareIdentity } from '../services/songSharing';
 
-const SongShareContext = createContext<(song: ShareIdentity) => void>(() => {});
-export const useSongShare = () => useContext(SongShareContext);
+interface ShareDialogState { url: string | null; title: string; description: string; unavailable?: string }
+const SongShareContext = createContext<{
+  shareSong: (song: ShareIdentity) => void;
+  shareSearch: (state: CatalogUrlState) => void;
+}>({ shareSong: () => {}, shareSearch: () => {} });
+export const useSongShare = () => useContext(SongShareContext).shareSong;
+export const useSearchShare = () => useContext(SongShareContext).shareSearch;
 
-function ShareDialog({ url, onClose }: { url: string | null; onClose: () => void }) {
+function ShareDialog({ state, onClose }: { state: ShareDialogState; onClose: () => void }) {
+  const { url, title, description, unavailable } = state;
   const ref = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState('');
@@ -20,34 +27,45 @@ function ShareDialog({ url, onClose }: { url: string | null; onClose: () => void
     if (!url || pending.current) return;
     pending.current = true;
     setBusy(true);
-    const result = await shareSongLink(url, navigator, copyOnly);
+    const result = await shareSongLink(url, navigator, copyOnly, title === 'Share search' ? 'Anime catalog search' : 'Anime song');
     pending.current = false;
     setBusy(false);
-    setMessage(result === 'copied' ? 'Link copied.' : result === 'shared' ? 'Song shared.'
+    setMessage(result === 'copied' ? 'Link copied.' : result === 'shared' ? (title === 'Share search' ? 'Search shared.' : 'Song shared.')
       : result === 'cancelled' ? 'Sharing cancelled.' : 'Could not copy automatically. Select the link below and copy it.');
     if (result === 'manual') { input.current?.focus(); input.current?.select(); }
   };
   return <dialog ref={ref} onCancel={(event) => { event.preventDefault(); onClose(); }}
-    aria-labelledby="share-song-title" className="m-auto w-[min(92vw,30rem)] rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-neutral-100 shadow-2xl backdrop:bg-black/60">
-    <h2 id="share-song-title" className="text-lg font-semibold">Share song</h2>
+    aria-labelledby="share-link-title" className="m-auto w-[min(92vw,30rem)] rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-neutral-100 shadow-2xl backdrop:bg-black/60">
+    <h2 id="share-link-title" className="text-lg font-semibold">{title}</h2>
     {url ? <>
-      <p className="my-3 text-sm text-neutral-300">Anyone with this link can open the song without an account.</p>
-      <label className="text-sm">Song link<input ref={input} readOnly value={url} onFocus={event => event.target.select()}
+      <p className="my-3 text-sm text-neutral-300">{description}</p>
+      <label className="text-sm">Link<input ref={input} readOnly value={url} onFocus={event => event.target.select()}
         className="mt-1 w-full rounded border border-neutral-600 bg-neutral-950 p-2 text-sm" /></label>
       <p role="status" className="my-3 text-sm text-emerald-300">{message}</p>
       <div className="flex flex-wrap gap-2">
         {typeof navigator.share === 'function' && <button disabled={busy} onClick={() => void send(false)} className="rounded bg-emerald-700 px-3 py-2 disabled:opacity-50">Share</button>}
         <button disabled={busy} onClick={() => void send(true)} className="rounded bg-neutral-700 px-3 py-2 disabled:opacity-50">Copy link</button>
       </div>
-    </> : <p className="my-3 text-sm text-neutral-300">This custom song has no public catalog link. Only songs with a public catalog ID can be shared.</p>}
+    </> : <p className="my-3 text-sm text-neutral-300">{unavailable}</p>}
     <button onClick={onClose} className="mt-4 rounded border border-neutral-600 px-3 py-2">Close</button>
   </dialog>;
 }
 
 export function SongShareProvider({ children }: { children: React.ReactNode }) {
-  const [dialog, setDialog] = useState<{ url: string | null } | null>(null);
-  return <SongShareContext.Provider value={song => setDialog({ url: songShareUrl(song, new URL(window.location.href)) })}>
+  const [dialog, setDialog] = useState<ShareDialogState | null>(null);
+  const value = {
+    shareSong: (song: ShareIdentity) => setDialog({
+      url: songShareUrl(song, new URL(window.location.href)), title: 'Share song',
+      description: 'Anyone with this link can open the song without an account.',
+      unavailable: 'This custom song has no public catalog link. Only songs with a public catalog ID can be shared.',
+    }),
+    shareSearch: (state: CatalogUrlState) => setDialog({
+      url: catalogSearchShareUrl(state, new URL(window.location.href)), title: 'Share search',
+      description: 'This link includes your search text and public filters. Anyone with it can restore this catalog view.',
+    }),
+  };
+  return <SongShareContext.Provider value={value}>
     {children}
-    {dialog && <ShareDialog key={dialog.url ?? 'custom'} url={dialog.url} onClose={() => setDialog(null)} />}
+    {dialog && <ShareDialog key={`${dialog.title}:${dialog.url ?? 'custom'}`} state={dialog} onClose={() => setDialog(null)} />}
   </SongShareContext.Provider>;
 }

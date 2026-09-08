@@ -3,6 +3,7 @@ import { getSearchableAnimeTitles } from './animeTitles';
 import { getSearchTerms, normalizeSearchText } from './searchText';
 
 type SearchableSong = Pick<AnimeSongItem, 'anime_name' | 'anime_name_english' | 'anime_name_romaji' | 'anime_alt_names' | 'artist' | 'song_name'>;
+const normalizedSongs = new WeakMap<object, { artist: string; combined: string }>();
 
 function normalize(value: string): string {
   return normalizeSearchText(value);
@@ -18,6 +19,7 @@ function artistPhrasePattern(phrase: string): RegExp {
 export function createCatalogQueryMatcher(query: string, aliases: Record<string, string[]>) {
   const q = normalize(query);
   const queryTerms = getSearchTerms(q);
+  if (queryTerms.length === 0) return () => true;
   const expansions: { artists: RegExp[]; remainingTerms: string[] }[] = [];
 
   for (const [key, relatedArtists] of Object.entries(aliases)) {
@@ -35,8 +37,16 @@ export function createCatalogQueryMatcher(query: string, aliases: Record<string,
   }
 
   return (item: SearchableSong): boolean => {
-    const artist = normalize(item.artist || '');
-    const combined = `${getSearchableAnimeTitles(item).map(normalize).join(' ')} ${artist} ${normalize(item.song_name || '')}`;
+    let normalized = normalizedSongs.get(item);
+    if (!normalized) {
+      const artist = normalize(item.artist || '');
+      normalized = {
+        artist,
+        combined: `${getSearchableAnimeTitles(item).map(normalize).join(' ')} ${artist} ${normalize(item.song_name || '')}`,
+      };
+      normalizedSongs.set(item, normalized);
+    }
+    const { artist, combined } = normalized;
     // Ordinary anime/song/artist searches keep their existing partial-word behavior.
     if (queryTerms.every((term) => combined.includes(term))) return true;
 
