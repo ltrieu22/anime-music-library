@@ -31,12 +31,9 @@ HTMLMediaElement.prototype.pause = function () { this.dispatchEvent(new Event('p
 HTMLMediaElement.prototype.load = function () {};
 let shared = 0;
 let copied = '';
-let nativeResult: 'success' | 'cancel' | 'failure' = 'success';
 let clipboardFails = false;
 Object.defineProperty(navigator, 'share', { configurable: true, value: async () => {
   shared++;
-  if (nativeResult === 'cancel') throw new DOMException('Cancelled', 'AbortError');
-  if (nativeResult === 'failure') throw new Error('Denied');
 } });
 Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => {
   if (clipboardFails) throw new Error('Denied');
@@ -47,7 +44,7 @@ let revision = 0;
 const wait = (ms = 35) => new Promise(resolve => setTimeout(resolve, ms));
 const check = (ok: boolean, message: string) => { if (!ok) throw new Error(message); };
 async function until(predicate: () => boolean) {
-  for (let i = 0; i < 100; i++) { if (predicate()) return; await wait(); }
+  for (let i = 0; i < 150; i++) { if (predicate()) return; await wait(); }
   throw new Error('Timed out waiting for UI');
 }
 const text = () => document.getElementById('root')!.textContent || '';
@@ -84,26 +81,23 @@ document.getElementById('run')!.onclick = async () => {
     await navigate('play=song-34830&season=Fall');
     await button('Reset');
     check(sourceWrites === writes, 'Filter navigation and reset never restart shared media');
+    const address = location.href;
     await button('Share current song');
-    await button('Share');
-    check(shared === 1 && text().includes('Song shared.'), 'Native share success');
-    nativeResult = 'cancel';
-    await button('Share');
-    check(!copied && text().includes('Sharing cancelled.'), 'Cancellation does not copy');
-    nativeResult = 'failure';
-    await button('Share');
-    check(copied.includes('play=song-34830') && text().includes('Link copied.'), 'Native failure falls back to clipboard');
+    check(copied.includes('play=song-34830') && text().includes('Link copied.'), 'Player immediately copies link');
+    check(shared === 0 && !document.querySelector('dialog[open]'), 'Song sharing opens no dialog or native share');
+    check(location.href === address && sourceWrites === writes, 'Copy preserves URL and playback');
+    check(document.activeElement?.getAttribute('aria-label') === 'Share current song', 'Copy preserves focus');
+    await until(() => !text().includes('Link copied.'));
     clipboardFails = true;
-    await button('Copy link');
-    check(text().includes('Select the link below'), 'Clipboard failure exposes manual fallback');
-    const input = document.querySelector<HTMLInputElement>('dialog input')!;
-    check(input.selectionEnd === input.value.length && input.selectionStart === 0, 'Fallback link is selected');
-    await button('Close');
-    check(document.activeElement?.getAttribute('aria-label') === 'Share current song', 'Dialog restores focus');
+    await button('Share current song');
+    check(text().includes('Could not copy the link.') && !text().includes('Link copied.'), 'Clipboard failure shows honest toast');
+    clipboardFails = false;
     await button('More song actions');
     await button('Share song');
-    check(Boolean(document.querySelector('dialog[open] input')), 'Row action opens share dialog');
-    await button('Close');
+    check(copied.includes('play=song-34830') && text().includes('Link copied.'), 'Row action copies immediately');
+    check(!document.querySelector('dialog[open]'), 'Row action opens no dialog');
+    const seasons = [...document.querySelectorAll<HTMLOptionElement>('select[aria-label="Anime season"] option')];
+    check(seasons.length === 5 && !seasons.some(option => option.value === 'UNKNOWN'), 'Season dropdown contains All and four seasons');
     await navigate('play=song-34831&q=hidden');
     await until(() => source.endsWith('fixture.mp3'));
     check(text().includes('Audio Song'), 'Audio-only shared link prepares intended song');
@@ -127,12 +121,11 @@ document.getElementById('run')!.onclick = async () => {
     await button('Saved Songs');
     await button('Linked Song');
     await button('Share current song');
-    check(document.querySelector<HTMLInputElement>('dialog input')!.value.includes('play=song-34830'), 'Saved player shares source identity');
-    await button('Close');
+    check(copied.includes('play=song-34830') && text().includes('Link copied.'), 'Saved player shares source identity');
     await button('Custom Song');
     await button('Share current song');
     check(text().includes('custom song has no public catalog link'), 'Custom player explains unavailable link');
-    await button('Close');
-    result.textContent = 'PASS: full-app deep links, filter isolation, no restarts, blocked autoplay recovery, volume, native share/cancel/failure, copy/manual fallback, focus, row action, audio-only links, invalid/missing IDs/media, saved identity and custom songs (StrictMode).';
+    check(!document.querySelector('dialog[open]'), 'Custom song opens no dialog');
+    result.textContent = 'PASS: full-app deep links, filter isolation, no restarts, blocked autoplay recovery, volume, immediate copy, toast expiry, clipboard failure, focus, row action, season options, audio-only links, invalid/missing IDs/media, saved identity and custom songs (StrictMode).';
   } catch (error) { result.textContent = `FAIL: ${error instanceof Error ? error.message : error}`; }
 };

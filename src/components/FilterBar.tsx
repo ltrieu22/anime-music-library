@@ -188,7 +188,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               className="min-h-11 rounded-lg border border-neutral-700 bg-neutral-900 px-2 text-neutral-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500">
               <option value="ALL">All seasons</option>
               {ANIME_SEASONS.map((season) => <option key={season} value={season}>{season}</option>)}
-              <option value="UNKNOWN">Unknown</option>
             </select>
           </label>
 
