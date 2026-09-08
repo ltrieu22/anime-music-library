@@ -25,5 +25,6 @@ export function toSongTrack(
     type: song.theme_type || undefined,
     anilistId: ('anilist_id' in song ? song.anilist_id : undefined) ?? fallback?.anilist_id,
     videoUrl: mediaUrl,
+    actionSong: structuredClone(song),
   };
 }

@@ -1,8 +1,14 @@
 import { useSongShare } from '../../context/SongShareContext';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Share2,
+  Heart,
+  Ellipsis,
+  ListPlus,
+  ListEnd,
+  NotebookPen,
   Play,
   Pause,
   SkipBack,
@@ -23,6 +29,7 @@ import { adjustPlayerVolumeForWheel } from '../../services/playerVolume';
 import { getAniListAnimeUrl } from '../../utils/anilist';
 import { ThemeBadge } from '../ThemeBadge';
 import { QueuePanel } from './QueuePanel';
+import type { PlayerActionSong, SongTrack } from '../../types/player';
 
 const PIP_MIN_WIDTH = 280;
 const PIP_MAX_WIDTH = 720;
@@ -141,7 +148,36 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-export const MusicPlayer: React.FC = () => {
+interface MusicPlayerProps {
+  isSongSaved: (song: PlayerActionSong) => boolean;
+  onToggleSaved: (song: PlayerActionSong) => void | Promise<void>;
+  onAddToPlaylist: (song: PlayerActionSong) => void;
+  onEditNote: (song: PlayerActionSong) => void;
+}
+
+function getPlayerActionSong(track: SongTrack): PlayerActionSong {
+  if (track.actionSong) return track.actionSong;
+  const metadata = track.animeTitles ?? {};
+  const id = metadata.id ?? String(track.id).replace(/^(?:catalog|collection|notes):/, '');
+  return {
+    ...metadata,
+    id,
+    anime_name: track.animeTitle,
+    anime_year: 0,
+    artist: track.artist ?? '',
+    song_name: track.songName ?? 'Theme Song',
+    theme_type: track.type,
+    video_url: track.videoUrl,
+    anilist_id: track.anilistId,
+  };
+}
+
+export const MusicPlayer: React.FC<MusicPlayerProps> = ({
+  isSongSaved,
+  onToggleSaved,
+  onAddToPlaylist,
+  onEditNote,
+}) => {
   const shareSong = useSongShare();
   const {
     currentTrack,
@@ -163,6 +199,7 @@ export const MusicPlayer: React.FC = () => {
     toggleMute,
     toggleVideo,
     closePlayer,
+    addToQueue,
   } = usePlayer();
 
   const { displayTitle } = useTitleLanguage();
@@ -171,10 +208,68 @@ export const MusicPlayer: React.FC = () => {
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isSavePending, setIsSavePending] = useState(false);
+  const [actionAnnouncement, setActionAnnouncement] = useState('');
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!isActionsOpen) return;
+    const trigger = actionsButtonRef.current;
+    const menu = actionsMenuRef.current;
+    if (!trigger || !menu) return;
+
+    const positionMenu = () => {
+      const anchor = trigger.getBoundingClientRect();
+      const bounds = menu.getBoundingClientRect();
+      const margin = 8;
+      // Align the menu's right edge with its trigger, shifting inward at screen edges.
+      menu.style.left = `${clamp(anchor.right - bounds.width, margin, Math.max(margin, document.documentElement.clientWidth - bounds.width - margin))}px`;
+      menu.style.top = `${clamp(anchor.top - bounds.height - margin, margin, Math.max(margin, window.innerHeight - bounds.height - margin))}px`;
+    };
+    positionMenu();
+    const observer = new ResizeObserver(positionMenu);
+    observer.observe(trigger);
+    observer.observe(menu);
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
+    };
+  }, [isActionsOpen]);
   const [isVolumeReadoutVisible, setIsVolumeReadoutVisible] = useState(false);
   useEffect(() => {
-    if (!currentTrack) setIsQueueOpen(false);
-  }, [currentTrack]);
+    setIsActionsOpen(false);
+    if (!currentTrack) {
+      setIsQueueOpen(false);
+    }
+  }, [currentTrack?.id]);
+  useEffect(() => {
+    if (!isActionsOpen) return;
+    const focusFrame = window.requestAnimationFrame(() => {
+      actionsMenuRef.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.focus();
+    });
+    const close = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (actionsMenuRef.current?.contains(target) || actionsButtonRef.current?.contains(target)) return;
+      setIsActionsOpen(false);
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsActionsOpen(false);
+      actionsButtonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', keydown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', keydown);
+    };
+  }, [isActionsOpen]);
   const [pipLayout, setPipLayout] = useState<PipLayout>(getInitialPipLayout);
   const [pipInteraction, setPipInteraction] = useState<'drag' | 'resize' | null>(null);
   const [pipDragTilt, setPipDragTilt] = useState(0);
@@ -566,9 +661,74 @@ export const MusicPlayer: React.FC = () => {
   const animeUrl = currentTrack
     ? getAniListAnimeUrl(currentTrack.animeTitle, currentTrack.anilistId)
     : undefined;
+  const actionSong = currentTrack ? getPlayerActionSong(currentTrack) : null;
+  const songIsSaved = actionSong ? isSongSaved(actionSong) : false;
+
+  const toggleSaved = async () => {
+    if (!actionSong || isSavePending) return;
+    setIsSavePending(true);
+    try {
+      await onToggleSaved(actionSong);
+    } finally {
+      setIsSavePending(false);
+    }
+  };
+
+  const runPlayerAction = (action: () => void) => {
+    setIsActionsOpen(false);
+    actionsButtonRef.current?.focus();
+    action();
+  };
+
+  const actionsMenu = isActionsOpen && currentTrack && actionSong && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={actionsMenuRef}
+        role="menu"
+        aria-label="Current song actions"
+        onKeyDown={(event) => {
+          const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]'));
+          const index = items.indexOf(document.activeElement as HTMLButtonElement);
+          let next = index;
+          if (event.key === 'ArrowDown') next = index < 0 ? 0 : (index + 1) % items.length;
+          else if (event.key === 'ArrowUp') next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = items.length - 1;
+          else return;
+          event.preventDefault();
+          items[next]?.focus();
+        }}
+        className="fixed z-[90] w-52 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-lg border border-neutral-700/80 bg-[#1e2022] p-1.5 text-neutral-100 shadow-xl"
+      >
+        {[
+          { label: 'Share song', icon: Share2, run: () => shareSong(actionSong) },
+          { label: 'Add to playlist', icon: ListPlus, run: () => onAddToPlaylist(actionSong) },
+          { label: 'Add to queue', icon: ListEnd, run: () => {
+            addToQueue(currentTrack);
+            setActionAnnouncement(`${currentTrack.songName || currentTrack.animeTitle} added to queue.`);
+          } },
+          { label: 'Add personal note', icon: NotebookPen, run: () => onEditNote(actionSong) },
+        ].map(({ label, icon: Icon, run }) => (
+          <button
+            key={label}
+            type="button"
+            role="menuitem"
+            onClick={() => runPlayerAction(run)}
+            className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-neutral-200 transition-colors hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
+          >
+            <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
     <>
+      {actionsMenu}
+      <span role="status" aria-live="polite" className="sr-only">{actionAnnouncement}</span>
       {currentTrack && <div aria-hidden="true" className="h-28 shrink-0 sm:h-20" />}
       {isQueueOpen && currentTrack && <QueuePanel onClose={() => setIsQueueOpen(false)} />}
       {currentTrack && playbackNotice && <div role="status" className="fixed bottom-28 sm:bottom-20 inset-x-0 z-50 bg-neutral-900 border-t border-neutral-700 px-4 py-2 text-center text-sm text-amber-200">{playbackNotice}</div>}
@@ -778,7 +938,7 @@ export const MusicPlayer: React.FC = () => {
           </div>
 
           {/* CENTER: Prev, Play/Pause, Next controls and Clickable Progress Bar */}
-          <div className="flex min-w-24 sm:min-w-0 flex-col items-center justify-center flex-1 max-w-xl sm:px-2">
+          <div className="flex min-w-20 sm:min-w-0 flex-col items-center justify-center flex-1 max-w-xl sm:px-2">
             {/* Playback Controls */}
             <div className="flex items-center gap-1 sm:gap-4 mb-1.5">
               <button
@@ -855,21 +1015,38 @@ export const MusicPlayer: React.FC = () => {
               aria-expanded={isQueueOpen}
               aria-controls="playback-queue"
               title={`Show queue (${upcomingQueueItems.length} upcoming)`}
-              className={`relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-emerald-300 ${isQueueOpen ? 'bg-emerald-950/60 text-emerald-300' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
+              className={`relative inline-flex h-11 w-10 sm:w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-emerald-300 ${isQueueOpen ? 'bg-emerald-950/60 text-emerald-300' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
             >
               <ListMusic aria-hidden="true" className="h-4 w-4" />
               {upcomingQueueItems.length > 0 && <span aria-hidden="true" className="absolute right-0 top-0 rounded-full bg-emerald-400 px-1 text-[9px] font-semibold text-neutral-950">{upcomingQueueItems.length > 99 ? '99+' : upcomingQueueItems.length}</span>}
             </button>
-            <button type="button" onClick={() => shareSong(currentTrack.animeTitles ?? {})}
-              aria-label="Share current song" title="Share song"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300">
-              <Share2 className="h-4 w-4" />
+            <button
+              type="button"
+              onClick={() => void toggleSaved().catch(() => {})}
+              disabled={isSavePending}
+              aria-label={songIsSaved ? 'Remove current song from saved songs' : 'Save current song'}
+              title={songIsSaved ? 'Remove from saved songs' : 'Save song'}
+              className={`flex h-11 w-10 sm:w-11 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50 ${songIsSaved ? 'text-emerald-400 hover:bg-emerald-950/50 hover:text-emerald-300' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
+            >
+              <Heart aria-hidden="true" className={`h-4 w-4 ${songIsSaved ? 'fill-current' : ''}`} />
+            </button>
+            <button
+              ref={actionsButtonRef}
+              type="button"
+              onClick={() => setIsActionsOpen(value => !value)}
+              aria-label="More player actions"
+              aria-haspopup="menu"
+              aria-expanded={isActionsOpen}
+              title="More song actions"
+              className={`flex h-11 w-10 sm:w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300 ${isActionsOpen ? 'bg-neutral-800 text-white' : ''}`}
+            >
+              <Ellipsis aria-hidden="true" className="h-[18px] w-[18px]" />
             </button>
             {/* Show Video / Video ON Toggle */}
             <button
               type="button"
               onClick={() => toggleVideo()}
-              className={`flex min-h-11 min-w-11 justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+              className={`flex min-h-11 min-w-10 sm:min-w-11 justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                 isVideoVisible
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                   : 'bg-neutral-800 text-neutral-300 border-neutral-700/80 hover:bg-neutral-700 hover:text-white'
@@ -937,7 +1114,7 @@ export const MusicPlayer: React.FC = () => {
             <button
               type="button"
               onClick={closePlayer}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
+              className="flex h-11 w-10 sm:w-11 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors cursor-pointer"
               title="Close Player"
               aria-label="Close Player"
             >

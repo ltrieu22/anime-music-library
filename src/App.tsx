@@ -790,7 +790,12 @@ function MainApp() {
       )}
 
       {/* Persistent Anime Music Player */}
-      <MusicPlayer />
+      <MusicPlayer
+        isSongSaved={isSongSaved}
+        onToggleSaved={handleToggleSaved}
+        onAddToPlaylist={handleAddToPlaylist}
+        onEditNote={setActiveNoteSong}
+      />
     </div>
   );
 }
