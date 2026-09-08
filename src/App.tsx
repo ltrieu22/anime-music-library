@@ -1,3 +1,7 @@
+import { SongShareProvider } from './context/SongShareContext';
+import { SharedSongLink } from './components/SharedSongLink';
+import { CATALOG_MIN_YEAR, CATALOG_MAX_YEAR } from './services/catalogUrlState';
+import { useCatalogSearchState } from './services/useCatalogSearchState';
 import { compareAnimeSeason, copyAnimeSeasonMetadata, getAnimeSeason, matchesAnimeSeason } from './services/animeSeason';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
@@ -57,15 +61,6 @@ import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 type NoteableSong = AnimeSongEntry | AnimeSongItem | NoteSongSnapshot;
 
-const DEFAULT_SORTS: Record<DatabaseMode, { key: SortKey; order: SortOrder }> = {
-  anisongdb: { key: 'anime_year', order: 'desc' },
-  animethemes: { key: 'anime_year', order: 'desc' },
-  collection: { key: 'id', order: 'asc' },
-  notes: { key: 'anime_year', order: 'desc' },
-};
-
-const CATALOG_MIN_YEAR = 1924;
-const CATALOG_MAX_YEAR = 2026;
 const CATALOG_PAGE_SIZE = 100;
 
 function sortSongItems<T extends NoteableSong>(
@@ -119,7 +114,6 @@ function MainApp() {
   const [anisongdbSongs, setAnisongdbSongs] = useState<AnimeSongItem[]>([]);
   const [isLoadingAniSongDb, setIsLoadingAniSongDb] = useState(false);
   const [aniSongDbTotal, setAniSongDbTotal] = useState(0);
-  const [catalogPageRequest, setCatalogPageRequest] = useState({ key: '', page: 0 });
   const [loadedCatalogKey, setLoadedCatalogKey] = useState('');
   const [catalogOffset, setCatalogOffset] = useState(0);
 
@@ -144,18 +138,13 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
-  // Filters and Sorting
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeArtistFilter, setActiveArtistFilter] = useState<ActiveArtistFilter | null>(null);
-  const [seasonFilter, setSeasonFilter] = useState('ALL');
-  const [themeTypeFilter, setThemeTypeFilter] = useState('ALL'); // ALL, OP, ED, IN
-  const [sortsByMode, setSortsByMode] = useState(DEFAULT_SORTS);
-  const { key: sortKey, order: sortOrder } = sortsByMode[mode];
-
-  // The full-range selection is the unfiltered catalog range.
-  const [selectedMinYear, setSelectedMinYear] = useState<number>(CATALOG_MIN_YEAR);
-  const [selectedMaxYear, setSelectedMaxYear] = useState<number>(CATALOG_MAX_YEAR);
+  const { state: searchState, update: updateSearch, typeQuery, reset: resetSearch } = useCatalogSearchState(mode, setMode);
+  const { draft: searchQuery, q: debouncedSearch, yearMin: selectedMinYear, yearMax: selectedMaxYear,
+    season: seasonFilter, theme: themeTypeFilter, sortKey, sortOrder, page: catalogPage } = searchState;
+  const activeArtistFilter: ActiveArtistFilter | null = searchState.artistIds.length
+    ? { ids: searchState.artistIds, label: searchState.artistLabel || `Artist ID ${searchState.artistIds.join(', ')}` } : null;
+  const artistSelectionContext = useRef({ mode, searchState });
+  artistSelectionContext.current = { mode, searchState };
 
   const [playlistSong, setPlaylistSong] = useState<PlaylistSongReference | null>(null);
 
@@ -205,14 +194,6 @@ function MainApp() {
     loadCollection();
   }, []);
 
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   // Resolve Saved Songs using stable catalog identity first, with the existing
   // metadata fingerprint as a compatibility fallback for older saved entries.
   const findSavedEntry = useCallback((song: NoteableSong) => {
@@ -258,25 +239,14 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAddOpen, isDataOpen, editingEntry, activeNoteSong]);
 
-  // Sorting handler - cleanly toggle between ascending and descending
-  const handleSort = (key: SortKey) => {
-    setSortsByMode((prev) => ({
-      ...prev,
-      [mode]: {
-        key,
-        order: prev[mode].key === key
-          ? (prev[mode].order === 'asc' ? 'desc' : 'asc')
-          : (key === 'anime_year' ? 'desc' : 'asc'),
-      },
-    }));
-  };
-
-  const handleSearchChange = (value: string) => {
-    if (activeArtistFilter) setActiveArtistFilter(null);
-    setSearchQuery(value);
-  };
+  const handleSort = (key: SortKey) => updateSearch({
+    sortKey: key,
+    sortOrder: sortKey === key ? (sortOrder === 'asc' ? 'desc' : 'asc') : (key === 'anime_year' ? 'desc' : 'asc'),
+  });
+  const handleSearchChange = typeQuery;
 
   const handleArtistSelect = async (song: AnimeSongItem) => {
+    const context = artistSelectionContext.current;
     let resolvedSong = song;
     if (!resolvedSong.artists?.length) {
       try {
@@ -286,6 +256,10 @@ function MainApp() {
       }
     }
 
+    // A late artist lookup must not overwrite a newer search or history navigation.
+    if (artistSelectionContext.current.mode !== context.mode
+      || artistSelectionContext.current.searchState !== context.searchState) return;
+
     const ids = Array.from(
       new Set((resolvedSong.artists || []).map((artist) => artist.id).filter(Number.isInteger))
     );
@@ -294,9 +268,7 @@ function MainApp() {
       return;
     }
 
-    setSearchQuery('');
-    setDebouncedSearch('');
-    setActiveArtistFilter({ ids, label: song.artist });
+    updateSearch({ q: '', draft: '', artistIds: ids, artistLabel: song.artist });
     showToast(`Filtering by the exact artist ID for "${song.artist}"`, 'info');
   };
 
@@ -454,8 +426,7 @@ function MainApp() {
     const result = await resetEntriesToDefault();
     closePlayer();
     setCollectionEntries(result);
-    setSelectedMinYear(CATALOG_MIN_YEAR);
-    setSelectedMaxYear(CATALOG_MAX_YEAR);
+    updateSearch({ yearMin: CATALOG_MIN_YEAR, yearMax: CATALOG_MAX_YEAR });
     showToast('Collection reset to empty');
   };
 
@@ -481,16 +452,7 @@ function MainApp() {
     setActiveNoteSong(null);
   };
 
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setDebouncedSearch('');
-    setActiveArtistFilter(null);
-    setSelectedMinYear(CATALOG_MIN_YEAR);
-    setSelectedMaxYear(CATALOG_MAX_YEAR);
-    setThemeTypeFilter('ALL');
-    setSeasonFilter('ALL');
-    setSortsByMode((prev) => ({ ...prev, [mode]: DEFAULT_SORTS[mode] }));
-  };
+  const handleResetFilters = resetSearch;
 
   const noteRecords = useMemo(
     () => (Object.values(notes) as PersonalSongNote[]).filter((note) => note.text.trim().length > 0),
@@ -533,13 +495,7 @@ function MainApp() {
   const artistFilterKey = activeArtistFilter?.ids.join(',') || '';
   const catalogQueryKey = JSON.stringify([mode, searchQuery, debouncedSearch, artistFilterKey,
     selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder]);
-  const catalogPage = catalogPageRequest.key === catalogQueryKey ? catalogPageRequest.page : 0;
   const catalogRequestKey = JSON.stringify([catalogQueryKey, catalogPage]);
-
-  useEffect(() => {
-    setCatalogPageRequest((previous) => previous.key === catalogQueryKey
-      ? previous : { key: catalogQueryKey, page: 0 });
-  }, [catalogQueryKey]);
 
   useEffect(() => {
     if (!isCatalogMode) return;
@@ -563,7 +519,7 @@ function MainApp() {
         setLoadedCatalogKey(catalogRequestKey);
         setIsLoadingAniSongDb(false);
         if (result.offset !== params.offset) {
-          setCatalogPageRequest({ key: catalogQueryKey, page: Math.floor(result.offset / CATALOG_PAGE_SIZE) });
+          updateSearch({ page: Math.floor(result.offset / CATALOG_PAGE_SIZE) }, 'replace');
         }
         if (!activeArtistFilter) {
           try {
@@ -624,7 +580,7 @@ function MainApp() {
         ].map(({ label, page, disabled }) => (
           <button key={label} type="button" disabled={isLoading || disabled}
             onClick={() => {
-              setCatalogPageRequest({ key: catalogQueryKey, page });
+              updateSearch({ page });
               document.getElementById('catalog-results-start')?.scrollIntoView({ block: 'start' });
             }}
             className="min-h-11 px-3 rounded-lg border border-neutral-700 text-sm hover:bg-neutral-700 cursor-pointer disabled:opacity-40 disabled:cursor-default focus-visible:outline-2 focus-visible:outline-emerald-400">
@@ -640,7 +596,7 @@ function MainApp() {
       {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
       <FilterBar
         seasonFilter={seasonFilter}
-        onSeasonChange={setSeasonFilter}
+        onSeasonChange={(season) => updateSearch({ season })}
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         minYear={CATALOG_MIN_YEAR}
@@ -648,16 +604,15 @@ function MainApp() {
         selectedMinYear={selectedMinYear}
         selectedMaxYear={selectedMaxYear}
         onYearRangeChange={(min, max) => {
-          setSelectedMinYear(min);
-          setSelectedMaxYear(max);
+          updateSearch({ yearMin: min, yearMax: max });
         }}
         totalFiltered={totalFilteredCount}
         totalItems={totalItemsCount}
         onResetFilters={handleResetFilters}
         themeTypeFilter={isCatalogMode ? themeTypeFilter : undefined}
-        onThemeTypeChange={isCatalogMode ? setThemeTypeFilter : undefined}
+        onThemeTypeChange={isCatalogMode ? (theme) => updateSearch({ theme }) : undefined}
         activeArtistFilter={isCatalogMode ? activeArtistFilter : null}
-        onClearArtistFilter={isCatalogMode ? () => setActiveArtistFilter(null) : undefined}
+        onClearArtistFilter={isCatalogMode ? () => updateSearch({ artistIds: [], artistLabel: undefined }) : undefined}
         placeholderText={
           isCatalogMode
             ? 'Search anime, artist, song title, or your notes... (Press / to focus)'
@@ -709,7 +664,7 @@ function MainApp() {
             try {
               const entries = reorderSavedSongs(songs.map(song => Number(song.id)));
               setCollectionEntries(entries);
-              setSortsByMode(previous => ({ ...previous, collection: { key: 'id', order: 'asc' } }));
+              updateSearch({ sortKey: 'id', sortOrder: 'asc' });
             } catch (cause) {
               showToast(cause instanceof Error ? cause.message : 'Could not save song order.', 'info');
               throw cause;
@@ -745,6 +700,7 @@ function MainApp() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <SharedSongLink />
         {mode === 'collection' ? (
           <CollectionLibrary
             savedCount={collectionEntries.length}
@@ -840,7 +796,7 @@ export default function App() {
   return (
     <TitleLanguageProvider>
       <PlayerProvider>
-        <PlaylistsProvider><MainApp /></PlaylistsProvider>
+        <PlaylistsProvider><SongShareProvider><MainApp /></SongShareProvider></PlaylistsProvider>
       </PlayerProvider>
     </TitleLanguageProvider>
   );

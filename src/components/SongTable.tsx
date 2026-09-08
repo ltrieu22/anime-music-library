@@ -1,8 +1,10 @@
+import { useSongShare } from '../context/SongShareContext';
 import { animeSeasonLabel } from '../services/animeSeason';
 import { useTitleLanguage } from '../context/TitleLanguageContext';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Share2,
   ListPlus,
   GripVertical,
   ListEnd,
@@ -289,10 +291,13 @@ export const SongTable: React.FC<SongTableProps> = ({
     });
   };
 
+  const shareSong = useSongShare();
+
   const getMenuActions = (item: SongRowItem, index: number) => {
     const track = getPlayerTrack(item);
     const songName = item.song_name || displayTitle(item);
     const primary: SongMenuAction[] = [
+      { id: 'share', label: 'Share song', icon: Share2, onSelect: () => shareSong(item) },
       {
         id: 'playlist',
         label: 'Add to playlist',

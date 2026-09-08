@@ -1,6 +1,8 @@
+import { useSongShare } from '../../context/SongShareContext';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
+  Share2,
   Play,
   Pause,
   SkipBack,
@@ -140,11 +142,13 @@ function formatTime(seconds: number): string {
 }
 
 export const MusicPlayer: React.FC = () => {
+  const shareSong = useSongShare();
   const {
     currentTrack,
     upcomingQueueItems,
     canSkipNext,
     isPlaying,
+    playbackNotice,
     isVideoVisible,
     currentTime,
     duration,
@@ -565,7 +569,9 @@ export const MusicPlayer: React.FC = () => {
 
   return (
     <>
+      {currentTrack && <div aria-hidden="true" className="h-28 shrink-0 sm:h-20" />}
       {isQueueOpen && currentTrack && <QueuePanel onClose={() => setIsQueueOpen(false)} />}
+      {currentTrack && playbackNotice && <div role="status" className="fixed bottom-28 sm:bottom-20 inset-x-0 z-50 bg-neutral-900 border-t border-neutral-700 px-4 py-2 text-center text-sm text-amber-200">{playbackNotice}</div>}
       {/*
         SINGLE <video> Element Architecture:
         The video tag is ALWAYS mounted in this container.
@@ -724,10 +730,10 @@ export const MusicPlayer: React.FC = () => {
         <div
           ref={playerBarRef}
           id="spotify-music-player"
-          className="player-bar-enter fixed bottom-0 left-0 right-0 h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl select-none"
+          className="player-bar-enter fixed bottom-0 left-0 right-0 h-28 sm:h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 grid grid-cols-[minmax(0,1fr)_auto] sm:flex items-center justify-between gap-x-2 sm:gap-4 shadow-2xl select-none"
         >
           {/* LEFT: Anime Poster, Title, and Theme Info */}
-          <div className="flex items-center gap-3 min-w-0 w-[24%] sm:w-[30%]">
+          <div className="flex items-center gap-3 min-w-0 col-span-2 w-full sm:w-[30%]">
             <div className="relative hidden sm:flex w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700/60 flex-shrink-0 items-center justify-center shadow-inner">
               {posterUrl ? (
                 <img
@@ -853,6 +859,11 @@ export const MusicPlayer: React.FC = () => {
             >
               <ListMusic aria-hidden="true" className="h-4 w-4" />
               {upcomingQueueItems.length > 0 && <span aria-hidden="true" className="absolute right-0 top-0 rounded-full bg-emerald-400 px-1 text-[9px] font-semibold text-neutral-950">{upcomingQueueItems.length > 99 ? '99+' : upcomingQueueItems.length}</span>}
+            </button>
+            <button type="button" onClick={() => shareSong(currentTrack.animeTitles ?? {})}
+              aria-label="Share current song" title="Share song"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300">
+              <Share2 className="h-4 w-4" />
             </button>
             {/* Show Video / Video ON Toggle */}
             <button

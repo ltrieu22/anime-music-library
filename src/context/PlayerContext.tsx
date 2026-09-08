@@ -37,6 +37,7 @@ export interface PlayerContextType {
   upcomingQueueItems: QueueItem[];
   canSkipNext: boolean;
   isPlaying: boolean;
+  playbackNotice: string;
   isVideoVisible: boolean;
   currentTime: number;
   duration: number;
@@ -89,6 +90,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     void warmCovers();
     return () => { cancelled = true; };
   }, [queueState.items, queueState.index]);
+  const [playbackNotice, setPlaybackNotice] = useState('');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -169,6 +171,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
+      if (videoRef.current.error) videoRef.current.load();
       if (videoRef.current.ended) videoRef.current.currentTime = 0;
       videoRef.current
         .play()
@@ -176,6 +179,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         .catch((err) => {
           console.warn('Playback resume failed:', err);
           setIsPlaying(false);
+          setPlaybackNotice(err?.name === 'NotAllowedError' ? 'Playback is paused. Press Play to listen.' : 'This media could not be played. Press Play to retry.');
         });
     }
   }, [currentTrack, isPlaying]);
@@ -254,6 +258,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const video = videoRef.current;
     if (!video) return;
 
+    setPlaybackNotice('');
     if (!currentTrack) {
       video.pause();
       video.removeAttribute('src');
@@ -288,6 +293,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .catch((err) => {
         if (cancelled) return;
         console.warn('Auto-play blocked or failed:', err);
+        setPlaybackNotice(err?.name === 'NotAllowedError' ? 'Playback is paused. Press Play to listen.' : 'This media could not be played. Press Play to retry.');
         setIsPlaying(false);
       });
     return () => { cancelled = true; };
@@ -307,6 +313,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
 
     const handlePlay = () => {
+      setPlaybackNotice('');
       setIsPlaying(true);
     };
 
@@ -331,6 +338,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     };
 
+    const handleError = () => {
+      setIsPlaying(false);
+      setPlaybackNotice('This media could not be loaded. Press Play to retry.');
+    };
+    video.addEventListener('error', handleError);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('play', handlePlay);
@@ -339,6 +351,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     video.addEventListener('volumechange', handleVolumeChange);
 
     return () => {
+      video.removeEventListener('error', handleError);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('play', handlePlay);
@@ -360,6 +373,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         upcomingQueueItems: queueState.items.slice(queueState.index + 1),
         canSkipNext: canAdvanceQueue(queueState),
         isPlaying,
+        playbackNotice,
         isVideoVisible,
         currentTime,
         duration,
