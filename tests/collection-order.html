@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Collection order checks</title></head>
+  <head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob:; media-src 'self' data: blob:"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Collection order checks</title></head>
   <body>
     <button id="run">Run collection checks</button>
     <pre id="result">Ready. Uses isolated in-memory storage; your saved data is untouched.</pre>

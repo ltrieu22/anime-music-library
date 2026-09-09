@@ -2,6 +2,9 @@ import { AnimeSongEntry, AnimeSearchResult } from '../types';
 import { searchStaticCatalog } from './catalogEngine';
 import { getCachedCover, rememberCover } from './coverCache';
 import { reorderSongSubset } from './songOrder';
+import { fetchAniList } from './anilistClient';
+import { animeDetailsCache, animeDetailsKey } from './animeDetailsCache';
+import type { AnimeDetails } from '../types';
 
 export const LOCAL_STORAGE_KEY = 'anime_songs_db_v1';
 let isServerApiAvailable: boolean | null = null;
@@ -115,6 +118,9 @@ export async function searchAnime(query: string): Promise<AnimeSearchResult[]> {
       if (Array.isArray(json.results)) {
         return json.results;
       }
+    } else if (res.status !== 404) {
+      // Do not bypass a failing or rate-limited proxy with another AniList call.
+      return [];
     }
   } catch (err) {
     console.warn('Server search proxy offline, trying direct client fallback', err);
@@ -135,7 +141,7 @@ export async function searchAnime(query: string): Promise<AnimeSearchResult[]> {
         }
       }
     `;
-    const res = await fetch('https://graphql.anilist.co', {
+    const res = await fetchAniList({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: queryDoc, variables: { search: query } }),
@@ -157,19 +163,27 @@ export async function searchAnime(query: string): Promise<AnimeSearchResult[]> {
 
 // Fetch Anime Cover & Details (Server API + AniList GraphQL + Kitsu fallback)
 const animeCoverRequests = new Map<string, ReturnType<typeof loadAnimeCoverDetails>>();
+const failedCovers = new Map<string, number>();
 
 export function fetchAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
-  const key = anilistId ? `id:${anilistId}` : `title:${animeTitle.trim().toLowerCase()}`;
+  const key = animeDetailsKey(animeTitle, anilistId);
+  const details = animeDetailsCache.get(key);
+  if (details) return Promise.resolve(details);
+  if ((failedCovers.get(key) || 0) > Date.now()) return Promise.resolve({ anime: animeTitle, id: anilistId || null } as AnimeDetails);
   const cached = animeCoverRequests.get(key);
   if (cached) return cached;
   const request = loadAnimeCoverDetails(animeTitle, anilistId).then(details => {
-    // Allow a later attempt when the provider is temporarily unavailable.
-    if (!details.coverImage) animeCoverRequests.delete(key);
-    else rememberCover(animeTitle, anilistId, details.coverImage);
+    if (!details.coverImage) {
+      failedCovers.set(key, Date.now() + 60_000);
+      if (failedCovers.size > 500) failedCovers.delete(failedCovers.keys().next().value!);
+    } else {
+      failedCovers.delete(key);
+      rememberCover(animeTitle, anilistId, details.coverImage);
+      animeDetailsCache.set(key, details);
+    }
     return details;
-  }).catch(error => {
+  }).finally(() => {
     animeCoverRequests.delete(key);
-    throw error;
   });
   animeCoverRequests.set(key, request);
   return request;
@@ -182,7 +196,7 @@ export async function fetchAnimeCoverUrl(animeTitle: string, anilistId?: number 
   return details.coverImage || null;
 }
 
-async function loadAnimeCoverDetails(animeTitle: string, anilistId?: number | null) {
+async function loadAnimeCoverDetails(animeTitle: string, anilistId?: number | null): Promise<AnimeDetails> {
   if (isServerApiAvailable !== false) {
     try {
       const params = new URLSearchParams();
@@ -196,6 +210,10 @@ async function loadAnimeCoverDetails(animeTitle: string, anilistId?: number | nu
         if (json.data?.coverImage) {
           return json.data;
         }
+        // The proxy already tried its providers. Do not query them again.
+        if (json.data) return { anime: animeTitle, id: anilistId || null };
+      } else if (res.status !== 404) {
+        return { anime: animeTitle, id: anilistId || null };
       }
     } catch {
       // Server unreachable, proceed to client fallback
@@ -226,7 +244,7 @@ async function loadAnimeCoverDetails(animeTitle: string, anilistId?: number | nu
     if (anilistId) variables.id = anilistId;
     else if (animeTitle) variables.search = animeTitle;
 
-    const res = await fetch('https://graphql.anilist.co', {
+    const res = await fetchAniList({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables }),

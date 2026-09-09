@@ -4,7 +4,8 @@ import { ArrowLeft, Bookmark, ListMusic, Pencil, Plus, Trash2, X } from 'lucide-
 import { PLAYLIST_NAME_LIMIT, SAVED_SONGS_ID, type CustomPlaylist, type PlaylistChange } from '../../services/playlistsStorage';
 
 const buttonStyle = 'min-h-11 min-w-11 cursor-pointer rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300';
-type DialogAction = { type: 'create' } | { type: 'rename' | 'delete'; playlist: CustomPlaylist };
+type DialogAction = { type: 'create' } | { type: 'rename' | 'delete'; playlist: CustomPlaylist }
+  | { type: 'deleteMany'; playlists: CustomPlaylist[] };
 
 // Uses the same native modal, cancellation, focus containment and restoration
 // pattern as RemoveSongModal. Deletion starts on Cancel.
@@ -16,10 +17,11 @@ function PlaylistDialog({ action, onClose, onSave }: {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const [name, setName] = useState(action.type === 'create' ? '' : action.playlist.name);
+  const [name, setName] = useState('playlist' in action ? action.playlist.name : '');
   const [error, setError] = useState('');
-  const deleting = action.type === 'delete';
-  const title = deleting ? 'Delete playlist?' : action.type === 'create' ? 'Create playlist' : 'Rename playlist';
+  const deleting = action.type === 'delete' || action.type === 'deleteMany';
+  const deletingLists = action.type === 'deleteMany' ? action.playlists : action.type === 'delete' ? [action.playlist] : [];
+  const title = action.type === 'deleteMany' ? `Delete ${deletingLists.length} playlist${deletingLists.length === 1 ? '' : 's'}?` : deleting ? 'Delete playlist?' : action.type === 'create' ? 'Create playlist' : 'Rename playlist';
 
   useEffect(() => {
     const returnTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -32,7 +34,7 @@ function PlaylistDialog({ action, onClose, onSave }: {
     return () => {
       dialog.close();
       document.body.style.overflow = overflow;
-      if (returnTarget?.isConnected) returnTarget.focus();
+      if (returnTarget?.isConnected && !returnTarget.matches(':disabled')) returnTarget.focus();
       else document.getElementById('collection-library-heading')?.focus();
     };
   }, [deleting]);
@@ -62,14 +64,18 @@ function PlaylistDialog({ action, onClose, onSave }: {
         event.preventDefault();
         try {
           onSave(action.type === 'create' ? { type: 'create', name } : action.type === 'rename'
-            ? { type: 'rename', id: action.playlist.id, name } : { type: 'delete', id: action.playlist.id });
+            ? { type: 'rename', id: action.playlist.id, name } : action.type === 'deleteMany'
+              ? { type: 'deleteMany', ids: action.playlists.map((list) => list.id) } : { type: 'delete', id: action.playlist.id });
           onClose();
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save this change. Please retry.'); }
       }}>
         {deleting ? (
           <div id="playlist-delete-description" className="space-y-3 text-sm leading-6 text-neutral-300">
-            <p className="break-words rounded-xl border border-neutral-800 bg-neutral-900 p-4 font-semibold text-white">{action.playlist.name}</p>
-            <p>Delete this playlist? Saved Songs, other playlists, and your personal notes will stay.</p>
+            <ul className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-900 p-4 font-semibold text-white">
+              {deletingLists.map((list) => <li key={list.id} className="break-words">{list.name}</li>)}
+            </ul>
+            <p>{deletingLists.length === 1 ? 'Delete this playlist?' : 'Delete these playlists?'} Saved Songs, other playlists, and your personal notes will stay.</p>
+            <p>Your current playback and queue will continue. This cannot be undone.</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -84,7 +90,7 @@ function PlaylistDialog({ action, onClose, onSave }: {
         <div className="flex flex-wrap justify-end gap-3 border-t border-neutral-800 pt-4">
           <button ref={cancelRef} type="button" onClick={onClose} className={`${buttonStyle} text-neutral-300 hover:bg-neutral-800`}>Cancel</button>
           <button type="submit" className={`${buttonStyle} font-semibold ${deleting ? 'bg-rose-500 text-white hover:bg-rose-400' : 'bg-emerald-400 text-neutral-950 hover:bg-emerald-300'}`}>
-            {deleting ? 'Delete playlist' : action.type === 'create' ? 'Create playlist' : 'Save name'}
+            {action.type === 'deleteMany' ? `Delete selected (${deletingLists.length})` : deleting ? 'Delete playlist' : action.type === 'create' ? 'Create playlist' : 'Save name'}
           </button>
         </div>
       </form>
@@ -97,6 +103,16 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [action, setAction] = useState<DialogAction | null>(null);
   const [status, setStatus] = useState('');
+  const [managing, setManaging] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const doneRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (managing) doneRef.current?.focus(); }, [managing]);
+  const checkedLists = playlists.filter((list) => checkedIds.includes(list.id));
+  const finishManaging = () => {
+    setManaging(false);
+    setCheckedIds([]);
+    document.getElementById('collection-library-heading')?.focus();
+  };
 
   const selected = playlists.find((list) => list.id === selectedId);
   const showingSaved = selectedId === SAVED_SONGS_ID;
@@ -114,7 +130,18 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
           <h1 id="collection-library-heading" tabIndex={-1} className="break-words text-2xl font-bold text-white outline-none">{showingSaved ? 'Saved Songs' : selected?.name ?? 'My Collection'}</h1>
           <p className="mt-1 text-sm text-neutral-400">{showingSaved ? `${savedCount} saved song${savedCount === 1 ? '' : 's'} · Catalog Save adds here` : selected ? 'Custom playlist · Stored in this browser' : 'Your saved songs and playlists, stored in this browser.'}</p>
         </div>
-        {!showingDetail && <button onClick={() => setAction({ type: 'create' })} disabled={Boolean(error)} className={`${buttonStyle} flex shrink-0 items-center gap-2 bg-emerald-400 font-semibold text-neutral-950 hover:bg-emerald-300 disabled:opacity-50`}><Plus aria-hidden="true" className="h-4 w-4" />Create playlist</button>}
+        {!showingDetail && <div className="grid w-full sm:w-auto">
+          <div aria-hidden={managing} className={`col-start-1 row-start-1 flex gap-2 ${managing ? 'invisible' : ''}`}>
+          <button onClick={() => { setCheckedIds([]); setManaging(true); }} disabled={Boolean(error) || !playlists.length} className={`${buttonStyle} bg-neutral-800 text-neutral-200 hover:bg-neutral-700 disabled:opacity-50`}>Manage playlists</button>
+          <button onClick={() => setAction({ type: 'create' })} disabled={Boolean(error)} className={`${buttonStyle} flex items-center justify-center gap-2 bg-emerald-400 font-semibold text-neutral-950 hover:bg-emerald-300 disabled:opacity-50`}><Plus aria-hidden="true" className="h-4 w-4 shrink-0" />Create playlist</button>
+          </div>
+          <div aria-label="Playlist selection" aria-hidden={!managing} className={`col-start-1 row-start-1 flex gap-2 ${managing ? '' : 'invisible'}`}>
+            <button ref={doneRef} onClick={finishManaging} className={`${buttonStyle} bg-neutral-800 text-neutral-200 hover:bg-neutral-700`}>Done</button>
+            <button disabled={Boolean(error) || !playlists.length || checkedLists.length === playlists.length} onClick={() => setCheckedIds(playlists.map((list) => list.id))} className={`${buttonStyle} text-emerald-300 hover:bg-neutral-800 disabled:opacity-50`}>Select all</button>
+            <button aria-label={`Delete selected (${checkedLists.length})`} disabled={Boolean(error) || !checkedLists.length} onClick={() => setAction({ type: 'deleteMany', playlists: checkedLists })} className={`${buttonStyle} flex items-center justify-center gap-2 bg-rose-600 font-semibold text-white hover:bg-rose-500 disabled:opacity-50`}><Trash2 aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="whitespace-nowrap">Delete ({checkedLists.length})</span></button>
+            <span role="status" className="sr-only">{checkedLists.length} selected</span>
+          </div>
+        </div>}
         {selected && <div className="flex flex-wrap gap-2">
           <button disabled={Boolean(error)} onClick={() => setAction({ type: 'rename', playlist: selected })} className={`${buttonStyle} flex items-center gap-2 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 disabled:opacity-50`}><Pencil aria-hidden="true" className="h-4 w-4" />Rename playlist</button>
           <button disabled={Boolean(error)} onClick={() => setAction({ type: 'delete', playlist: selected })} className={`${buttonStyle} flex items-center gap-2 text-rose-300 hover:bg-rose-950/50 disabled:opacity-50`}><Trash2 aria-hidden="true" className="h-4 w-4" />Delete playlist</button>
@@ -124,12 +151,19 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
       <p role="status" className="sr-only">{status}</p>
       {showingSaved ? children : selected ? renderPlaylist(selected) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <button onClick={() => navigate(SAVED_SONGS_ID)} className="min-h-40 cursor-pointer rounded-xl border border-emerald-800/60 bg-gradient-to-br from-emerald-950/70 to-neutral-900 p-5 text-left transition-colors hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300">
+          <button disabled={managing} onClick={() => navigate(SAVED_SONGS_ID)} className="flex min-h-40 flex-col justify-center cursor-pointer rounded-xl border border-emerald-800/60 bg-gradient-to-br from-emerald-950/70 to-neutral-900 p-5 text-left transition-colors hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:cursor-default">
             <Bookmark aria-hidden="true" className="mb-5 h-6 w-6 text-emerald-400" />
             <h2 className="text-base font-semibold text-white">Saved Songs</h2>
-            <p className="mt-1 text-sm text-neutral-400">{savedCount} song{savedCount === 1 ? '' : 's'} · Built-in playlist</p>
+            <div className="mt-1 grid text-sm">
+              <p className={`col-start-1 row-start-1 text-neutral-400 ${managing ? 'invisible' : ''}`} aria-hidden={managing}>{savedCount} song{savedCount === 1 ? '' : 's'} · Built-in playlist</p>
+              <p className={`col-start-1 row-start-1 text-emerald-300 ${managing ? '' : 'invisible'}`} aria-hidden={!managing}>Protected · Cannot be deleted</p>
+            </div>
           </button>
-          {playlists.map((list) => <button key={list.id} onClick={() => navigate(list.id)} className="min-h-40 min-w-0 cursor-pointer rounded-xl border border-neutral-800 bg-[#232628] p-5 text-left transition-colors hover:border-neutral-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300">
+          {playlists.map((list) => managing ? <label key={list.id} className={`flex min-h-40 min-w-0 flex-col justify-center cursor-pointer rounded-xl border p-5 transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-emerald-300 ${checkedIds.includes(list.id) ? 'border-emerald-400 bg-emerald-950/50' : 'border-neutral-800 bg-[#232628] hover:border-neutral-500'}`}>
+            <span className="mb-5 flex items-center justify-between gap-3"><ListMusic aria-hidden="true" className="h-6 w-6 text-neutral-400" /><input type="checkbox" aria-label={`Select ${list.name}`} checked={checkedIds.includes(list.id)} disabled={Boolean(error)} onChange={(event) => setCheckedIds((ids) => event.target.checked ? [...ids, list.id] : ids.filter((id) => id !== list.id))} className="h-5 w-5 shrink-0 accent-emerald-400" /></span>
+            <span className="block break-words text-base font-semibold text-white">{list.name}</span>
+            <span className="mt-1 block text-sm text-neutral-400">{list.songs.length} song{list.songs.length === 1 ? '' : 's'} · Custom playlist</span>
+          </label> : <button key={list.id} onClick={() => navigate(list.id)} className="flex min-h-40 min-w-0 flex-col justify-center cursor-pointer rounded-xl border border-neutral-800 bg-[#232628] p-5 text-left transition-colors hover:border-neutral-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300">
             <ListMusic aria-hidden="true" className="mb-5 h-6 w-6 text-neutral-400" />
             <h2 className="break-words text-base font-semibold text-white">{list.name}</h2>
             <p className="mt-1 text-sm text-neutral-400">{list.songs.length} song{list.songs.length === 1 ? '' : 's'} · Custom playlist</p>
@@ -139,7 +173,10 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
       {action && <PlaylistDialog action={action} onClose={() => setAction(null)} onSave={(change) => {
         applyChange(change);
         if (change.type === 'delete') setSelectedId(null);
-        setStatus(change.type === 'create' ? 'Playlist created.' : change.type === 'rename' ? 'Playlist renamed.' : 'Playlist deleted.');
+        if (change.type === 'deleteMany') {
+          setCheckedIds([]);
+          setStatus(`${change.ids.length} playlist${change.ids.length === 1 ? '' : 's'} deleted. Current playback and queue continue.`);
+        } else setStatus(change.type === 'create' ? 'Playlist created.' : change.type === 'rename' ? 'Playlist renamed.' : 'Playlist deleted.');
       }} />}
     </section>
   );

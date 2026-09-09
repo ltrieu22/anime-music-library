@@ -515,6 +515,7 @@ function MainApp() {
     setCatalogError('');
     // Do not fetch intermediate pages while the typed query is still debouncing.
     if (searchQuery !== debouncedSearch) return;
+    const controller = new AbortController();
     async function fetchPage() {
       try {
         const params = {
@@ -523,7 +524,7 @@ function MainApp() {
         };
         const result = activeArtistFilter
           ? await searchSongsByArtistIds(activeArtistFilter.ids, params)
-          : await searchStaticCatalog({ ...params, q: debouncedSearch }, catalogNoteMatches);
+          : await searchStaticCatalog({ ...params, q: debouncedSearch }, catalogNoteMatches, controller.signal);
         if (!current) return;
         setAnisongdbSongs(result.data);
         setAniSongDbTotal(result.total);
@@ -552,7 +553,7 @@ function MainApp() {
       }
     }
     fetchPage();
-    return () => { current = false; };
+    return () => { current = false; controller.abort(); };
   }, [isCatalogMode, catalogRequestKey, catalogQueryKey, catalogPage, searchQuery, debouncedSearch,
     artistFilterKey, selectedMinYear, selectedMaxYear, themeTypeFilter, seasonFilter, sortKey, sortOrder, catalogNoteMatches, catalogAttempt]);
 

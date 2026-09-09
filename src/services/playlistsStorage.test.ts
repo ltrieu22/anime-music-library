@@ -8,6 +8,54 @@ function memoryStorage() {
   return { data, getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
 }
 
+test('bulk deletion is atomic, protects Saved Songs and preserves other memberships and data', () => {
+  const storage = memoryStorage();
+  const song = { source: 'anisongdb' as const, songId: 'shared-song' };
+  changePlaylists({ type: 'create', name: 'First', song }, storage);
+  changePlaylists({ type: 'create', name: 'Second', song }, storage);
+  const lists = changePlaylists({ type: 'create', name: 'Keep', song }, storage);
+  const ids = lists.slice(0, 2).map((list) => list.id);
+  const before = [...storage.data];
+  for (const invalid of [[], [ids[0], SAVED_SONGS_ID], [ids[0], 'missing']]) {
+    assert.throws(() => changePlaylists({ type: 'deleteMany', ids: invalid }, storage));
+    assert.deepEqual([...storage.data], before);
+  }
+  assert.throws(() => changePlaylists({ type: 'deleteMany', ids }, {
+    ...storage, setItem: () => { throw new Error('Quota'); },
+  }), /Could not save/);
+  assert.deepEqual([...storage.data], before);
+  // Include an intervening write from another tab and a duplicate selection ID.
+  const latest = changePlaylists({ type: 'create', name: 'Another tab', song }, storage);
+  let writes = 0;
+  const remaining = changePlaylists({ type: 'deleteMany', ids: [...ids, ids[0]] }, {
+    ...storage, setItem: (key, value) => { writes++; storage.setItem(key, value); },
+  });
+  assert.equal(writes, 1);
+  assert.deepEqual(remaining, latest.slice(2));
+  assert.deepEqual(loadPlaylists(storage), remaining);
+  assert.equal(storage.getItem('anime_songs_db_v1'), before[0][1]);
+  assert.equal(storage.getItem('anime-db:notes'), before[1][1]);
+  assert.deepEqual(changePlaylists({ type: 'deleteMany', ids: remaining.map((list) => list.id) }, storage), []);
+});
+
+test('create with first song is one atomic write and preserves unrelated data on failure', () => {
+  const storage = memoryStorage();
+  let writes = 0;
+  const song = { source: 'anisongdb' as const, songId: 'song-34830' };
+  const [created] = changePlaylists({ type: 'create', name: 'First song', song }, {
+    ...storage, setItem: (key, value) => { writes++; storage.setItem(key, value); },
+  });
+  assert.equal(writes, 1);
+  assert.deepEqual(created.songs, [song]);
+  const before = [...storage.data];
+  assert.throws(() => changePlaylists({ type: 'create', name: 'Failed', song }, {
+    ...storage, setItem: () => { throw new Error('Quota'); },
+  }), /Could not save/);
+  assert.deepEqual([...storage.data], before);
+  assert.throws(() => changePlaylists({ type: 'create', name: 'Invalid', song: { ...song, songId: '' } }, storage));
+  assert.deepEqual([...storage.data], before);
+});
+
 test('drag order persists exact song references and leaves other playlists intact', () => {
   const storage = memoryStorage();
   const [list] = changePlaylists({ type: 'create', name: 'Drag test' }, storage);

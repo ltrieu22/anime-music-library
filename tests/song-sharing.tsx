@@ -73,6 +73,7 @@ document.getElementById('run')!.onclick = async () => {
     history.replaceState({}, '', `${location.pathname}?play=song-34830&q=no-results&page=99`);
     root.render(<StrictMode><App key={revision++} /></StrictMode>);
     await until(() => text().includes('Press Play to listen.'));
+    await until(() => text().includes('No results'));
     check(text().includes('Linked Song') && text().includes('No results'), 'Link ignores filters and page');
     check(document.querySelector('video')!.volume === 0.26, 'Remembered volume applies before playback');
     blocked = false;

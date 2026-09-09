@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { searchCatalogResults } from './src/services/catalogResults';
 import type { AnimeTitleMetadata } from './src/types';
 import { copyAnimeTitleMetadata } from './src/services/animeTitles';
+import { fetchAniList } from './src/services/anilistClient';
 
 interface AnimeSongEntry extends AnimeTitleMetadata {
   id: number;
@@ -235,7 +236,7 @@ async function startServer() {
           }
         }
       `;
-      const anilistPromise = fetch('https://graphql.anilist.co', {
+      const anilistPromise = fetchAniList({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -370,7 +371,7 @@ async function startServer() {
         variables.search = title;
       }
 
-      const response = await fetch('https://graphql.anilist.co', {
+      const response = await fetchAniList({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

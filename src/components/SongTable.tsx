@@ -390,7 +390,7 @@ export const SongTable: React.FC<SongTableProps> = ({
         </button>
         <button
           type="button"
-          data-song-actions-trigger
+          data-song-actions-trigger={rowKey}
           onClick={(event) => openAnchoredMenu(event, item, index, rowKey)}
           aria-label="More song actions"
           aria-haspopup="menu"

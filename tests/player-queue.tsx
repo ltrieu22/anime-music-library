@@ -8,6 +8,13 @@ import { TitleLanguageProvider } from '../src/context/TitleLanguageContext';
 import '../src/index.css';
 import type { SongTrack } from '../src/types/player';
 
+// Keep manual fixture runs offline too; the automated runner also blocks
+// external traffic. Exercise artwork loading using a local data URL.
+const fixtureCover = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="56" height="80"><rect width="56" height="80" fill="teal"/></svg>');
+window.fetch = async () => new Response(JSON.stringify({ data: { coverImage: fixtureCover } }), {
+  headers: { 'Content-Type': 'application/json' },
+});
+
 let player: PlayerContextType;
 const media = { src: '', time: 0, paused: true, ended: false, sourceWrites: 0, plays: 0, loads: 0 };
 Object.defineProperties(HTMLMediaElement.prototype, {

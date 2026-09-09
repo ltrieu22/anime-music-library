@@ -72,10 +72,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const currentTrack = activeItem?.track ?? null;
   useEffect(() => {
     let cancelled = false;
-    // Warm a bounded window even while the queue panel is closed. Serial
-    // lookups avoid flooding the provider when a large playlist is started.
+    // Warm only the current and next track, serially, to avoid unnecessary
+    // provider calls for songs the listener may never reach.
     const warmCovers = async () => {
-      for (const { track } of queueState.items.slice(queueState.index, queueState.index + 7)) {
+      for (const { track } of queueState.items.slice(queueState.index, queueState.index + 2)) {
         if (cancelled) break;
         try {
           const url = track.image || await fetchAnimeCoverUrl(track.animeTitle, track.anilistId);

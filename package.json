@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/services/*.test.ts",
+    "test": "tsx --import ./tests/offline-unit-setup.mjs --test src/services/*.test.ts",
     "enrich:titles": "tsx scripts/enrich-titles.ts",
     "validate:titles": "tsx scripts/validate-title-enrichment.ts"
   },

@@ -7,7 +7,7 @@ await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL || 'msedge' });
 try {
-  for (const fixture of ['song-sharing', 'catalog-url', 'player-queue', 'collection-order']) {
+  for (const fixture of ['song-sharing', 'catalog-url', 'player-queue', 'collection-order', 'catalog-worker']) {
     const context = await browser.newContext();
     const page = await context.newPage();
     page.on('pageerror', error => console.error(error.message));

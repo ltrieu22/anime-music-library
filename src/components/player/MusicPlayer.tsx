@@ -24,7 +24,7 @@ import {
   ListMusic,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
-import { fetchAnimeCoverDetails } from '../../services/api';
+import { fetchAnimeCoverUrl } from '../../services/api';
 import { adjustPlayerVolumeForWheel } from '../../services/playerVolume';
 import { getAniListAnimeUrl } from '../../utils/anilist';
 import { ThemeBadge } from '../ThemeBadge';
@@ -344,10 +344,10 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
     setPosterUrl(null);
     let isMounted = true;
-    fetchAnimeCoverDetails(currentTrack.animeTitle, currentTrack.anilistId)
-      .then((details) => {
-        if (isMounted && details?.coverImage) {
-          setPosterUrl(details.coverImage);
+    fetchAnimeCoverUrl(currentTrack.animeTitle, currentTrack.anilistId)
+      .then((cover) => {
+        if (isMounted && cover) {
+          setPosterUrl(cover);
         }
       })
       .catch(() => {});

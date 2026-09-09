@@ -1,10 +1,13 @@
 import { AnimeSongItem } from '../types';
-import { compileCatalogResults, paginateCatalogResults, type CatalogParams } from './catalogResults';
+import { type CatalogParams } from './catalogResults';
 import { createCatalogLoader } from './catalogLoader';
+import { createCatalogSearchSession } from './catalogSearchSession';
+import { createCatalogWorkerClient } from './catalogWorkerClient';
 
 const loader = createCatalogLoader(getBaseUrl);
 export const subscribeStaticCatalog = loader.subscribe;
-const searchCache = new Map<string, AnimeSongItem[]>();
+const workerSearch = createCatalogWorkerClient(() => new Worker(new URL('./catalog.worker.ts', import.meta.url), { type: 'module' }));
+let fallbackSearch: ReturnType<typeof createCatalogSearchSession>;
 
 /**
  * Get base URL for static assets (handles GitHub Pages repo subpath)
@@ -25,22 +28,10 @@ export async function loadStaticCatalog(): Promise<[AnimeSongItem[], Record<stri
 /**
  * Perform client-side filter and sort on the catalog
  */
-export async function searchStaticCatalog(params: CatalogParams, additionalMatches: AnimeSongItem[] = []) {
+export async function searchStaticCatalog(params: CatalogParams, additionalMatches: AnimeSongItem[] = [], signal?: AbortSignal) {
   const [catalog, aliases] = await loadStaticCatalog();
-  if (additionalMatches.length) {
-    return paginateCatalogResults(compileCatalogResults(catalog, aliases, params, additionalMatches), params);
-  }
-  const { offset: _offset, limit: _limit, ...query } = params;
-  const key = JSON.stringify(query);
-  let ordered = searchCache.get(key);
-  if (!ordered) {
-    ordered = compileCatalogResults(catalog, aliases, params);
-    searchCache.set(key, ordered);
-    if (searchCache.size > 8) searchCache.delete(searchCache.keys().next().value!);
-  } else {
-    // Refresh recency so repeated pagination retains this query in the small cache.
-    searchCache.delete(key);
-    searchCache.set(key, ordered);
-  }
-  return paginateCatalogResults(ordered, params);
+  if (signal?.aborted) throw new DOMException('Search canceled', 'AbortError');
+  if (typeof Worker !== 'undefined') return workerSearch(catalog, aliases, params, additionalMatches, signal);
+  fallbackSearch ??= createCatalogSearchSession(catalog, aliases);
+  return fallbackSearch(params, additionalMatches);
 }

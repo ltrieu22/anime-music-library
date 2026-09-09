@@ -113,9 +113,10 @@ export function loadPlaylists(storage: StorageAccess = localStorage): CustomPlay
 }
 
 export type PlaylistChange =
-  | { type: 'create'; name: string }
+  | { type: 'create'; name: string; song?: PlaylistSongReference }
   | { type: 'rename'; id: string; name: string }
   | { type: 'delete'; id: string }
+  | { type: 'deleteMany'; ids: string[] }
   | { type: 'addSong'; id: string; song: PlaylistSongReference }
   | { type: 'removeSong'; id: string; songKey: string }
   | { type: 'reorderSongs'; id: string; songKeys: string[] }
@@ -127,7 +128,16 @@ export function changePlaylists(change: PlaylistChange, storage: StorageAccess =
   let next: CustomPlaylist[];
   if (change.type === 'create') {
     const name = validatePlaylistName(change.name, lists);
-    next = [...lists, { id: crypto.randomUUID(), name, songs: [] }];
+    if (change.song && !isSongReference(change.song)) throw new Error('This song could not be added.');
+    next = [...lists, { id: crypto.randomUUID(), name, songs: change.song ? [structuredClone(change.song)] : [] }];
+  } else if (change.type === 'deleteMany') {
+    const ids = new Set(change.ids);
+    if (!ids.size) throw new Error('Select at least one playlist.');
+    if (ids.has(SAVED_SONGS_ID)) throw new Error('Saved Songs cannot be deleted.');
+    if ([...ids].some((id) => !lists.some((list) => list.id === id))) {
+      throw new Error('A selected playlist no longer exists. Close this dialog and select playlists again.');
+    }
+    next = lists.filter((list) => !ids.has(list.id));
   } else {
     if (change.id === SAVED_SONGS_ID) throw new Error('Saved Songs cannot be renamed or deleted.');
     if (!lists.some((list) => list.id === change.id)) throw new Error('This playlist no longer exists. Close this dialog and try again.');

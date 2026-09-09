@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimeDetails } from '../types';
 import { fetchAnimeCoverDetails } from '../services/api';
+import { animeDetailsCache, animeDetailsKey } from '../services/animeDetailsCache';
 import { Star, Image as ImageIcon } from 'lucide-react';
 
 interface AnimeHoverCardProps {
@@ -19,9 +20,6 @@ interface PositionCoords {
   position: 'top' | 'bottom';
 }
 
-// Client cache to avoid repeat network requests
-const detailsCache = new Map<string, AnimeDetails | null>();
-
 export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
   animeName,
   displayName,
@@ -29,10 +27,10 @@ export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
   children,
   className = '',
 }) => {
-  const cacheKey = anilistId ? `id_${anilistId}` : animeName.toLowerCase().trim();
+  const cacheKey = animeDetailsKey(animeName, anilistId);
   const [isOpen, setIsOpen] = useState(false);
   const [details, setDetails] = useState<AnimeDetails | null>(
-    detailsCache.get(cacheKey) || null
+    animeDetailsCache.get(cacheKey)
   );
   const [isLoading, setIsLoading] = useState(false);
   const [coords, setCoords] = useState<PositionCoords | null>(null);
@@ -84,24 +82,23 @@ export const AnimeHoverCard: React.FC<AnimeHoverCardProps> = ({
       calculatePosition();
       setIsOpen(true);
 
-      const cached = detailsCache.get(cacheKey);
+      const cached = animeDetailsCache.get(cacheKey);
       if (cached) {
         setDetails(cached);
       } else {
         setIsLoading(true);
         fetchAnimeCoverDetails(animeName, anilistId)
           .then((res) => {
-            detailsCache.set(cacheKey, res);
             setDetails(res);
           })
           .catch(() => {
-            detailsCache.set(cacheKey, null);
+            setDetails(null);
           })
           .finally(() => {
             setIsLoading(false);
           });
       }
-    }, 80);
+    }, 400);
   };
 
   const handleMouseLeave = () => {
