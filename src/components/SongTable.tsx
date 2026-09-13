@@ -8,6 +8,7 @@ import {
   ListPlus,
   GripVertical,
   ListEnd,
+  ListStart,
   NotebookPen,
   Heart,
   Ellipsis,
@@ -123,7 +124,7 @@ export const SongTable: React.FC<SongTableProps> = ({
 }) => {
   const { resolveSeason, displayTitle } = useTitleLanguage();
   const isCatalogMode = isAniSongDbMode !== undefined ? isAniSongDbMode : isAnimeThemesMode;
-  const { currentTrack, queueSource, isPlaying, playTrack, togglePlay, addToQueue } = usePlayer();
+  const { currentTrack, queueSource, isPlaying, playTrack, togglePlay, addToQueue, playNext } = usePlayer();
   const [openMenu, setOpenMenu] = React.useState<OpenSongMenu | null>(null);
   const [pendingSaveKeys, setPendingSaveKeys] = React.useState<Set<string>>(() => new Set());
   const [menuAnnouncement, setMenuAnnouncement] = React.useState('');
@@ -314,6 +315,17 @@ export const SongTable: React.FC<SongTableProps> = ({
           if (!track) return;
           addToQueue(track);
           setMenuAnnouncement(`${songName} added to queue.`);
+        },
+      },
+      {
+        id: 'play-next',
+        label: 'Play next',
+        icon: ListStart,
+        disabled: !track,
+        onSelect: () => {
+          if (!track) return;
+          playNext(track);
+          setMenuAnnouncement(currentTrack ? `${songName} queued next.` : `${songName} playback started.`);
         },
       },
       {

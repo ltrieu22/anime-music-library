@@ -8,6 +8,9 @@ import {
   Ellipsis,
   ListPlus,
   ListEnd,
+  ListStart,
+  Repeat,
+  Repeat1,
   NotebookPen,
   Play,
   Pause,
@@ -200,6 +203,9 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     toggleVideo,
     closePlayer,
     addToQueue,
+    playNext,
+    repeatMode,
+    setRepeatMode,
   } = usePlayer();
 
   const { displayTitle } = useTitleLanguage();
@@ -707,6 +713,10 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
             addToQueue(currentTrack);
             setActionAnnouncement(`${currentTrack.songName || currentTrack.animeTitle} added to queue.`);
           } },
+          { label: 'Play next', icon: ListStart, run: () => {
+            playNext(currentTrack);
+            setActionAnnouncement(`${currentTrack.songName || currentTrack.animeTitle} queued next.`);
+          } },
           { label: 'Add personal note', icon: NotebookPen, run: () => onEditNote(actionSong) },
         ].map(({ label, icon: Icon, run }) => (
           <button
@@ -935,6 +945,20 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
                 )}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = repeatMode === 'off' ? 'one' : repeatMode === 'one' ? 'all' : 'off';
+                setRepeatMode(next);
+                setActionAnnouncement(`Repeat ${next}.`);
+              }}
+              aria-label={`Repeat: ${repeatMode}. Switch to ${repeatMode === 'off' ? 'Repeat one' : repeatMode === 'one' ? 'Repeat all' : 'Off'}`}
+              title={`Repeat: ${repeatMode}. Click to change; choose a mode in the queue.`}
+              className={`flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs focus-visible:outline-2 focus-visible:outline-emerald-300 hover:bg-neutral-800 ${repeatMode === 'off' ? 'text-neutral-400' : 'text-emerald-300'}`}
+            >
+              {repeatMode === 'one' ? <Repeat1 aria-hidden="true" className="h-4 w-4" /> : <Repeat aria-hidden="true" className="h-4 w-4" />}
+              <span>{repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'One' : 'All'}</span>
+            </button>
           </div>
 
           {/* CENTER: Prev, Play/Pause, Next controls and Clickable Progress Bar */}

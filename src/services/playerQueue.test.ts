@@ -17,7 +17,8 @@ function unchangedMedia(before: QueueState, after: QueueState) {
 
 test('empty operations are safe; empty playQueue preserves existing playback', () => {
   for (const action of [
-    { type: 'next' }, { type: 'previous' }, { type: 'close' }, { type: 'clearUpcoming' },
+    { type: 'next' }, { type: 'ended' }, { type: 'previous' }, { type: 'close' }, { type: 'clearUpcoming' },
+    { type: 'playNext', tracks: [] },
     { type: 'append', tracks: [] }, { type: 'remove', queueItemId: 'missing' },
     { type: 'moveUpcoming', queueItemId: 'missing', toIndex: 0 },
   ] as const) {
@@ -29,16 +30,16 @@ test('empty operations are safe; empty playQueue preserves existing playback', (
   assert.equal(reduce(state, { type: 'replace', tracks: [], source: 'collection' }), state);
 });
 
-test('untouched collection wraps forward/back and repeats a one-song collection', () => {
-  const last = start(undefined, 2);
+test('Repeat all wraps forward/back and repeats a one-song queue with stable IDs', () => {
+  const last = reduce(start(undefined, 2), { type: 'setRepeat', mode: 'all' });
   assert.equal(currentQueueItem(reduce(last, { type: 'next' }))?.track, a);
-  assert.equal(currentQueueItem(reduce(start(), { type: 'previous' }))?.track, c);
+  assert.equal(currentQueueItem(reduce({ ...last, index: 0 }, { type: 'previous' }))?.track, c);
   assert.ok(canAdvanceQueue(last));
-  const single = start([a]);
-  const looped = reduce(single, { type: 'next' });
+  const single = reduce(start([a]), { type: 'setRepeat', mode: 'all' });
+  const looped = reduce(single, { type: 'ended' });
   assert.equal(currentQueueItem(single), currentQueueItem(looped));
   assert.equal(looped.playbackRevision, single.playbackRevision + 1);
-  assert.equal(canAdvanceQueue(single), false);
+  assert.equal(canAdvanceQueue(single), true);
 });
 
 test('catalog replacement discards collection/history and stops at the end', () => {
@@ -106,7 +107,7 @@ test('removing current advances to next; removing current tail closes instead of
   assert.equal(currentQueueItem(reduce(only, { type: 'remove', queueItemId: only.items[0].queueItemId })), null);
 });
 
-test('clear upcoming preserves current/history and prevents collection wrap even at the tail', () => {
+test('clear upcoming preserves current/history and Off stops even for collections', () => {
   for (const index of [0, 1, 2]) {
     const state = start(undefined, index);
     const cleared = reduce(state, { type: 'clearUpcoming' });
@@ -136,7 +137,7 @@ test('reordering only upcoming occurrences preserves media and plays the request
   }
 });
 
-test('manual previous never wraps; starting a collection again restores collection behavior', () => {
+test('Off never wraps even when replacing a manual queue with a collection', () => {
   const state = reduce(initialQueueState, { type: 'append', tracks: [b, c] });
   assert.equal(currentQueueItem(reduce(state, { type: 'previous' }))?.track, b);
   const next = reduce(state, { type: 'next' });
@@ -144,7 +145,68 @@ test('manual previous never wraps; starting a collection again restores collecti
   const collection = reduce(next, { type: 'replace', tracks: [a, c], source: 'collection', startIndex: 1 });
   assert.equal(collection.source, 'collection');
   assert.deepEqual(ids(collection), [a.id, c.id]);
-  assert.equal(currentQueueItem(reduce(collection, { type: 'next' }))?.track, a);
+  assert.equal(reduce(collection, { type: 'next' }), collection);
+  assert.equal(reduce(collection, { type: 'ended' }), collection);
+});
+
+test('Play next inserts after current with fresh IDs and preserves history, upcoming and media', () => {
+  const state = start(undefined, 1);
+  const inserted = reduce(state, { type: 'playNext', tracks: [a, b] });
+  unchangedMedia(state, inserted);
+  assert.deepEqual(ids(inserted), [a.id, b.id, a.id, b.id, c.id]);
+  assert.equal(inserted.items[0], state.items[0]);
+  assert.equal(inserted.items[4], state.items[2]);
+  assert.equal(new Set(inserted.items.map(item => item.queueItemId)).size, 5);
+  const again = reduce(inserted, { type: 'playNext', tracks: [c] });
+  assert.deepEqual(ids(again), [a.id, b.id, c.id, a.id, b.id, c.id]);
+  unchangedMedia(inserted, again);
+  assert.equal(currentQueueItem(reduce(again, { type: 'next' }))?.track, c);
+  const empty = reduce(initialQueueState, { type: 'playNext', tracks: [b, a] });
+  assert.equal(currentQueueItem(empty)?.track, b);
+  assert.equal(empty.source, 'manual');
+  const tail = start(undefined, 2);
+  unchangedMedia(tail, reduce(tail, { type: 'playNext', tracks: [a] }));
+});
+
+test('Repeat one replays only on ended; manual Next and Previous navigate normally', () => {
+  for (const index of [0, 1, 2]) {
+    const state = start(undefined, index);
+    const one = reduce(state, { type: 'setRepeat', mode: 'one' });
+    unchangedMedia(state, one);
+    const ended = reduce(one, { type: 'ended' });
+    assert.equal(currentQueueItem(ended), currentQueueItem(one));
+    assert.equal(ended.playbackRevision, one.playbackRevision + 1);
+    const next = reduce(one, { type: 'next' });
+    assert.equal(next.index, Math.min(index + 1, 2));
+    assert.equal(canAdvanceQueue(one), index < 2);
+    assert.equal(reduce(one, { type: 'previous' }).index, Math.max(index - 1, 0));
+    const off = reduce(one, { type: 'setRepeat', mode: 'off' });
+    unchangedMedia(one, off);
+    assert.equal(reduce(off, { type: 'ended' }).index, Math.min(index + 1, 2));
+  }
+});
+
+test('repeat is explicit across sources, edits, replacements and close within a session', () => {
+  for (const mode of ['off', 'one', 'all'] as const) {
+    let state = reduce(start(), { type: 'setRepeat', mode });
+    for (const action of [
+      { type: 'append', tracks: [a] }, { type: 'playNext', tracks: [b] },
+      { type: 'moveUpcoming', queueItemId: state.items[2].queueItemId, toIndex: 0 },
+      { type: 'remove', queueItemId: state.items[1].queueItemId }, { type: 'clearUpcoming' },
+    ] as const) {
+      const next = reduce(state, action as Parameters<typeof reduce>[1]);
+      unchangedMedia(state, next);
+      assert.equal(next.repeatMode, mode);
+      state = next;
+    }
+    assert.equal(state.items.length, 1);
+    assert.equal(reduce(state, { type: 'ended' }).playbackRevision, state.playbackRevision + (mode === 'off' ? 0 : 1));
+    for (const source of ['single', 'collection'] as const) {
+      state = reduce(state, { type: 'replace', tracks: [c], source });
+      assert.equal(state.repeatMode, mode);
+    }
+    assert.equal(reduce(state, { type: 'close' }).repeatMode, mode);
+  }
 });
 
 test('close drops all queue state, keeps IDs fresh and leaves input song metadata untouched', () => {

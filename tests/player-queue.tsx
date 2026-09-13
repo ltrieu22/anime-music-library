@@ -110,22 +110,65 @@ run.onclick = async () => {
 
     await act(() => player.playQueue([a, b], 1));
     await act(ended);
-    check(player.currentTrack === a && player.queueSource === 'collection', 'collection did not wrap');
+    check(player.currentTrack === b && !player.isPlaying, 'Off should stop a collection');
+    await act(() => player.setRepeatMode('all'));
+    await act(ended);
+    check(player.currentTrack === a && player.queueSource === 'collection', 'Repeat all did not wrap');
+    await act(() => player.setRepeatMode('off'));
     await act(() => player.playTrack(c));
     check(player.queue.length === 1 && player.currentTrack === c && !player.canSkipNext, 'catalog did not replace collection');
     await act(ended);
     check(!player.isPlaying, 'catalog did not stop');
-    passed.push('Collection wraps; catalog title replaces it and stops');
+    passed.push('Off stops collections and catalog songs; Repeat all wraps');
 
     await act(() => player.playQueue([a]));
+    await act(() => player.setRepeatMode('one'));
     const singleWrites = media.sourceWrites;
     await act(ended);
-    check(media.sourceWrites === singleWrites + 1 && player.isPlaying, 'one-song collection did not repeat');
+    check(media.sourceWrites === singleWrites + 1 && player.isPlaying, 'Repeat one did not replay');
     await act(() => player.clearUpcoming());
+    await act(() => player.setRepeatMode('off'));
     const clearedWrites = media.sourceWrites;
     await act(ended);
-    check(!player.isPlaying && media.sourceWrites === clearedWrites, 'clear upcoming did not disable wrap');
-    passed.push('One-song collection repeats until upcoming is cleared');
+    check(!player.isPlaying && media.sourceWrites === clearedWrites, 'Off did not stop repeat');
+    passed.push('Repeat one replays a one-song collection until switched Off');
+
+    await act(() => player.playQueue([a, b, c], 1));
+    await act(() => { media.time = 42; player.videoRef.current!.dispatchEvent(new Event('timeupdate')); });
+    const beforeNext = player.currentQueueItem;
+    const nextWrites = media.sourceWrites;
+    const nextPlays = media.plays;
+    await act(() => { player.playNext([b, a]); player.setRepeatMode('one'); });
+    check(player.currentQueueItem === beforeNext && media.time === 42 && media.sourceWrites === nextWrites && media.plays === nextPlays,
+      'Play next or repeat change interrupted playing media');
+    check(player.upcomingQueueItems.map(item => item.track.id).join() === [b.id, a.id, c.id].join(), 'Play next insertion order wrong');
+    check(new Set(player.queueItems.map(item => item.queueItemId)).size === 5, 'Play next reused occurrence IDs');
+    await act(() => player.togglePlay());
+    await act(() => { player.playNext(c); player.setRepeatMode('all'); });
+    check(media.paused && media.time === 42 && media.sourceWrites === nextWrites && media.plays === nextPlays,
+      'Play next or repeat change resumed paused media');
+    await act(() => player.setRepeatMode('one'));
+    await act(() => player.nextTrack());
+    check(player.currentTrack === c && player.isPlaying, 'Next must bypass Repeat one');
+    const repeatedId = player.currentQueueItem;
+    await act(ended);
+    check(player.currentQueueItem === repeatedId && player.isPlaying && media.time === 0, 'Repeat one did not replay the same occurrence');
+    await act(() => player.setRepeatMode('off'));
+    await act(ended);
+    check(player.currentTrack === b && player.currentQueueItem !== beforeNext, 'Off must advance to duplicate occurrence');
+    passed.push('Play next and repeat changes preserve playing/paused media; Next bypasses Repeat one');
+
+    await act(() => player.closePlayer());
+    await act(() => player.playNext(a));
+    check(player.isPlaying && player.currentTrack === a, 'Play next in empty player must start');
+    await act(ended);
+    const completedWrites = media.sourceWrites;
+    await act(() => { player.playNext(b); player.setRepeatMode('all'); });
+    check(!player.isPlaying && media.sourceWrites === completedWrites, 'editing completed playback unexpectedly resumed');
+    await act(() => player.nextTrack());
+    check(player.currentTrack === b && player.isPlaying, 'Play next after completion failed');
+    await act(() => player.setRepeatMode('off'));
+    passed.push('Play next starts empty player and waits after completed playback');
 
     await act(() => player.playQueue([a, b]));
     await act(() => player.removeQueueItem(player.currentQueueItem!.queueItemId));

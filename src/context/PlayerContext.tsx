@@ -8,7 +8,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
-import { QueueItem, QueueSource, SongTrack } from '../types/player';
+import { QueueItem, QueueSource, RepeatMode, SongTrack } from '../types/player';
 import { canAdvanceQueue, currentQueueItem, initialQueueState, queueReducer } from '../services/playerQueue';
 import { readStoredPlayerVolume, sanitizePlayerVolume, writeStoredPlayerVolume } from '../services/playerVolume';
 import { fetchAnimeCoverUrl } from '../services/api';
@@ -36,6 +36,8 @@ export interface PlayerContextType {
   currentQueueItem: QueueItem | null;
   upcomingQueueItems: QueueItem[];
   canSkipNext: boolean;
+  repeatMode: RepeatMode;
+  setRepeatMode: (mode: RepeatMode) => void;
   isPlaying: boolean;
   playbackNotice: string;
   isVideoVisible: boolean;
@@ -46,11 +48,13 @@ export interface PlayerContextType {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   playTrack: (track: SongTrack, newQueue?: SongTrack[]) => void;
   playQueue: (tracks: SongTrack[], startIndex?: number) => void;
-  /** Append without interruption; an empty player starts a finite manual queue. */
+  /** Append without interruption; an empty player starts a manual queue. */
   addToQueue: (tracks: SongTrack | SongTrack[]) => void;
+  /** Insert immediately after current without interruption; starts an empty player. */
+  playNext: (tracks: SongTrack | SongTrack[]) => void;
   /** Current removal plays its successor, or closes if there is no successor. */
   removeQueueItem: (queueItemId: string) => void;
-  /** Retain current/history and disable collection wrap. */
+  /** Retain current/history and the explicit repeat setting. */
   clearUpcoming: () => void;
   /** Move only upcoming items; target is zero-based within upcomingQueueItems. */
   moveQueueItem: (queueItemId: string, upcomingIndex: number) => void;
@@ -155,6 +159,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const addToQueue = useCallback((tracks: SongTrack | SongTrack[]) => {
     dispatchQueue({ type: 'append', tracks: Array.isArray(tracks) ? tracks : [tracks] });
   }, []);
+  const playNext = useCallback((tracks: SongTrack | SongTrack[]) => {
+    dispatchQueue({ type: 'playNext', tracks: Array.isArray(tracks) ? tracks : [tracks] });
+  }, []);
+  const setRepeatMode = useCallback((mode: RepeatMode) => dispatchQueue({ type: 'setRepeat', mode }), []);
   const removeQueueItem = useCallback((queueItemId: string) => {
     dispatchQueue({ type: 'remove', queueItemId });
   }, []);
@@ -192,14 +200,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Previous track (if > 3 seconds in, restart current track; otherwise go back)
   const prevTrack = useCallback(() => {
     if (!currentTrack) return;
-    if ((currentTime > 3 || queueState.source === 'single' ||
-        (queueState.source === 'manual' && queueState.index === 0)) && videoRef.current) {
+    if ((currentTime > 3 || (queueState.index === 0 && queueState.repeatMode !== 'all')) && videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
       return;
     }
     dispatchQueue({ type: 'previous' });
-  }, [currentTrack, queueState.source, queueState.index, currentTime]);
+  }, [currentTrack, queueState.repeatMode, queueState.index, currentTime]);
 
   // Seek
   const seek = useCallback((timeInSeconds: number) => {
@@ -323,7 +330,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleEnded = () => {
       setIsPlaying(false);
-      nextTrack();
+      dispatchQueue({ type: 'ended' });
     };
 
     // Native controls (visible video, fullscreen) can change gain or mute
@@ -359,7 +366,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('volumechange', handleVolumeChange);
     };
-  }, [nextTrack]);
+  }, []);
 
   return (
     <PlayerContext.Provider
@@ -372,6 +379,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         currentQueueItem: activeItem,
         upcomingQueueItems: queueState.items.slice(queueState.index + 1),
         canSkipNext: canAdvanceQueue(queueState),
+        repeatMode: queueState.repeatMode,
+        setRepeatMode,
         isPlaying,
         playbackNotice,
         isVideoVisible,
@@ -383,6 +392,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         playTrack,
         playQueue,
         addToQueue,
+        playNext,
         removeQueueItem,
         clearUpcoming,
         moveQueueItem,

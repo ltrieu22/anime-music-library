@@ -1,26 +1,30 @@
-import type { QueueItem, QueueSource, SongTrack } from '../types/player';
+import type { QueueItem, QueueSource, RepeatMode, SongTrack } from '../types/player';
 
 export interface QueueState {
   items: QueueItem[];
   index: number;
   source: QueueSource;
   nextItemId: number;
+  repeatMode: RepeatMode;
   // Changes only for media transitions, including replay of the same occurrence.
   playbackRevision: number;
 }
 
 export const initialQueueState: QueueState = {
-  items: [], index: -1, source: null, nextItemId: 1, playbackRevision: 0,
+  items: [], index: -1, source: null, nextItemId: 1, playbackRevision: 0, repeatMode: 'off',
 };
 
 export type QueueAction =
   | { type: 'replace'; tracks: SongTrack[]; startIndex?: number; source: 'collection' | 'single' }
   | { type: 'append'; tracks: SongTrack[] }
+  | { type: 'playNext'; tracks: SongTrack[] }
+  | { type: 'setRepeat'; mode: RepeatMode }
   | { type: 'remove'; queueItemId: string }
   | { type: 'clearUpcoming' }
   // Position is zero-based within upcoming items, excluding current/history.
   | { type: 'moveUpcoming'; queueItemId: string; toIndex: number }
   | { type: 'next' }
+  | { type: 'ended' }
   | { type: 'previous' }
   | { type: 'close' };
 
@@ -30,7 +34,7 @@ export function currentQueueItem(state: QueueState): QueueItem | null {
 
 export function canAdvanceQueue(state: QueueState): boolean {
   return state.index >= 0 && (state.index < state.items.length - 1 ||
-    (state.source === 'collection' && state.items.length > 1));
+    state.repeatMode === 'all');
 }
 
 function closeQueue(state: QueueState): QueueState {
@@ -42,14 +46,19 @@ function closeQueue(state: QueueState): QueueState {
 export function queueReducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
     case 'replace':
-    case 'append': {
+    case 'append':
+    case 'playNext': {
       if (!action.tracks.length) return state;
       const items = action.tracks.map((track, index) => ({
         queueItemId: `queue:${state.nextItemId + index}`, track,
       }));
       const nextItemId = state.nextItemId + items.length;
-      if (action.type === 'append' && state.items.length) {
-        return { ...state, items: [...state.items, ...items], source: 'manual', nextItemId };
+      if (action.type !== 'replace' && state.items.length) {
+        const insertionIndex = action.type === 'playNext' ? state.index + 1 : state.items.length;
+        return {
+          ...state, source: 'manual', nextItemId,
+          items: [...state.items.slice(0, insertionIndex), ...items, ...state.items.slice(insertionIndex)],
+        };
       }
       const requestedIndex = action.type === 'replace' ? action.startIndex ?? 0 : 0;
       const index = Number.isFinite(requestedIndex)
@@ -75,7 +84,7 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
     case 'clearUpcoming': {
       if (!state.items.length) return state;
       if (state.source === 'manual' && state.index === state.items.length - 1) return state;
-      // Also disable collection wrap so cleared items cannot come back.
+      // Repeat applies only to retained occurrences, including history.
       return { ...state, items: state.items.slice(0, state.index + 1), source: 'manual' };
     }
     case 'moveUpcoming': {
@@ -90,15 +99,22 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       items.splice(to, 0, item);
       return { ...state, items, source: 'manual' };
     }
+    case 'setRepeat':
+      return state.repeatMode === action.mode ? state : { ...state, repeatMode: action.mode };
+    case 'ended':
+      if (state.items.length && state.repeatMode === 'one') {
+        return { ...state, playbackRevision: state.playbackRevision + 1 };
+      }
+      // Explicit Next ignores Repeat one and advances normally.
     case 'next': {
       if (!state.items.length) return state;
-      if (state.index === state.items.length - 1 && state.source !== 'collection') return state;
+      if (!canAdvanceQueue(state)) return state;
       return { ...state, index: (state.index + 1) % state.items.length, playbackRevision: state.playbackRevision + 1 };
     }
     case 'previous': {
       if (!state.items.length) return state;
       const index = state.index > 0 ? state.index - 1
-        : state.source === 'collection' ? state.items.length - 1 : 0;
+        : state.repeatMode === 'all' ? state.items.length - 1 : 0;
       return { ...state, index, playbackRevision: state.playbackRevision + 1 };
     }
     case 'close': return closeQueue(state);

@@ -3,7 +3,7 @@ import { ListMusic, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'motion/react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
-import type { QueueItem, SongTrack } from '../../types/player';
+import type { QueueItem, RepeatMode, SongTrack } from '../../types/player';
 import { QueueCover } from './QueueCover';
 import { QueueDuration } from './QueueDuration';
 import { QueueTile } from './QueueTile';
@@ -11,7 +11,7 @@ import { QueueTile } from './QueueTile';
 const controlClass = 'inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300';
 
 export function QueuePanel({ onClose }: { onClose: () => void }) {
-  const { currentQueueItem, upcomingQueueItems, queueSource, isPlaying, duration, removeQueueItem, clearUpcoming, moveQueueItem } = usePlayer();
+  const { currentQueueItem, upcomingQueueItems, repeatMode, setRepeatMode, isPlaying, duration, removeQueueItem, clearUpcoming, moveQueueItem } = usePlayer();
   const { displayTitle } = useTitleLanguage();
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -92,6 +92,14 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
         <button ref={closeRef} type="button" onClick={onClose} aria-label="Close queue" title="Close queue (keep playing)" className={controlClass}><X aria-hidden="true" className="h-5 w-5" /></button>
       </header>
       <motion.div layoutScroll className="overflow-y-auto overscroll-contain p-3 sm:p-4">
+        <div role="group" aria-label="Repeat mode" className="mb-3 flex gap-1 rounded-lg bg-neutral-950/50 p-1">
+          {([['off', 'Off'], ['one', 'Repeat one'], ['all', 'Repeat all']] as [RepeatMode, string][]).map(([mode, label]) => (
+            <button key={mode} type="button" aria-pressed={repeatMode === mode}
+              onClick={() => { setRepeatMode(mode); setAnnouncement(`Repeat ${mode}.`); }}
+              className={`min-h-11 min-w-0 flex-1 cursor-pointer rounded-md px-2 text-xs focus-visible:outline-2 focus-visible:outline-emerald-300 ${repeatMode === mode ? 'bg-emerald-950 text-emerald-300' : 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}`}
+            >{label}</button>
+          ))}
+        </div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-400">Now Playing <span className="normal-case font-normal text-neutral-400">{isPlaying ? '' : '· Paused / stopped'}</span></h3>
         {currentQueueItem && <div className="queue-row flex items-center gap-2.5 rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-2">
           <QueueCover key={currentQueueItem.queueItemId} track={currentQueueItem.track} />
@@ -99,16 +107,18 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
         </div>}
         <div className="mt-3 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Up next <span className="text-neutral-400">({upcomingQueueItems.length})</span></h3>
-          <button type="button" disabled={!upcomingQueueItems.length && queueSource !== 'collection'}
+          <button type="button" disabled={!upcomingQueueItems.length}
             className="min-h-11 cursor-pointer rounded-lg px-3 text-xs text-neutral-300 hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-default disabled:opacity-30"
             onClick={() => {
               pendingFocus.current = 'close';
               clearUpcoming();
-              setAnnouncement('Upcoming queue cleared. Playback will stop after the current song.');
+              setAnnouncement('Upcoming queue cleared. Repeat setting unchanged.');
             }}>Clear upcoming</button>
         </div>
         <p className="mb-2 text-xs leading-5 text-neutral-400">
-          {queueSource === 'collection' ? 'This playlist repeats. Editing the queue turns repeat off.' : 'Playback stops at the end of this queue.'}
+          {repeatMode === 'one' ? 'The current song repeats when it ends. Next advances to the next song.'
+            : repeatMode === 'all' ? 'At the end, playback returns to the first song in the retained queue, including previously played songs.'
+            : 'Playback stops at the end of this queue.'}
         </p>
         <p id="queue-reorder-help" className="sr-only">Drag a tile to reorder, or focus it and press Alt plus Arrow Up or Arrow Down.</p>
         {!upcomingQueueItems.length ? <p className="rounded-xl border border-dashed border-neutral-700 p-4 text-sm text-neutral-400">Nothing up next. Use Add to queue on a song to add it here.</p> : (

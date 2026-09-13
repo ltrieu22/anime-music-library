@@ -5,6 +5,7 @@
 - After building, `node tests/anilist-usage.mjs` verifies hover delays, persistent details and cooldowns across reloads/tabs with locally mocked AniList responses; all other external requests are blocked.
 - The fixture HTML pages restrict connections, images, and media to local resources (plus data/blob media). The player fixture supplies fake artwork, so manually opening it does not query AniList.
 - Production browser tests (`catalog-loading.mjs`, `playlist-picker.mjs`, `playlist-management.mjs`) and performance scripts also block external requests. Their harness serves local build files; it does not run the Express API proxy.
+- After building, `node tests/play-next-repeat.mjs` checks Play next and explicit repeat in the production UI, using local WAV audio with byte-range support for real seeking/end events. It covers playing/paused/completed media, duplicates, keyboard/focus, unavailable tracks and 1280/390/320 px layouts, with isolated storage and blocked external requests.
 - Performance scripts run a bounded number of local trials: five initial-load trials or three search trials. They are not background monitors or scheduled jobs.
 
 `npm run enrich:titles` is a separate data-maintenance command that makes real **AniSongDB** requests. It is not part of the test command and does not use AniList. Enrichment unit tests inject fake responses.

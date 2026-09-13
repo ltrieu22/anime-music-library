@@ -24,3 +24,5 @@ export interface QueueItem {
 }
 
 export type QueueSource = 'collection' | 'single' | 'manual' | null;
+
+export type RepeatMode = 'off' | 'one' | 'all';
