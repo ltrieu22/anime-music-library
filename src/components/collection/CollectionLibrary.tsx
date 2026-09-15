@@ -1,7 +1,11 @@
 import { usePlaylists } from '../../context/PlaylistsContext';
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, ListMusic, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, History, ListMusic, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { PLAYLIST_NAME_LIMIT, SAVED_SONGS_ID, type CustomPlaylist, type PlaylistChange } from '../../services/playlistsStorage';
+import { RecentSongs } from './RecentSongs';
+import { usePlayer } from '../../context/PlayerContext';
+
+const RECENT_SONGS_ID = 'recent-songs';
 
 const buttonStyle = 'min-h-11 min-w-11 cursor-pointer rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300';
 type DialogAction = { type: 'create' } | { type: 'rename' | 'delete'; playlist: CustomPlaylist }
@@ -99,6 +103,7 @@ function PlaylistDialog({ action, onClose, onSave }: {
 }
 
 export function CollectionLibrary({ savedCount, children, renderPlaylist }: { savedCount: number; children: React.ReactNode; renderPlaylist: (playlist: CustomPlaylist) => React.ReactNode }) {
+  const { recentSongs, playbackStorageError, retryPlaybackStorage } = usePlayer();
   const { playlists, error, refresh, change: applyChange } = usePlaylists();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [action, setAction] = useState<DialogAction | null>(null);
@@ -116,7 +121,8 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
 
   const selected = playlists.find((list) => list.id === selectedId);
   const showingSaved = selectedId === SAVED_SONGS_ID;
-  const showingDetail = showingSaved || Boolean(selected);
+  const showingRecent = selectedId === RECENT_SONGS_ID;
+  const showingDetail = showingSaved || showingRecent || Boolean(selected);
   const navigate = (id: string | null) => {
     setSelectedId(id);
     document.getElementById('collection-library-heading')?.focus();
@@ -127,8 +133,8 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           {showingDetail && <button onClick={() => navigate(null)} className={`${buttonStyle} -ml-3 mb-1 flex items-center gap-2 text-neutral-400 hover:text-white`}><ArrowLeft aria-hidden="true" className="h-4 w-4" />My Collection</button>}
-          <h1 id="collection-library-heading" tabIndex={-1} className="break-words text-2xl font-bold text-white outline-none">{showingSaved ? 'Saved Songs' : selected?.name ?? 'My Collection'}</h1>
-          <p className="mt-1 text-sm text-neutral-400">{showingSaved ? `${savedCount} saved song${savedCount === 1 ? '' : 's'} · Catalog Save adds here` : selected ? 'Custom playlist · Stored in this browser' : 'Your saved songs and playlists, stored in this browser.'}</p>
+          <h1 id="collection-library-heading" tabIndex={-1} className="break-words text-2xl font-bold text-white outline-none">{showingSaved ? 'Saved Songs' : showingRecent ? 'Recent songs' : selected?.name ?? 'My Collection'}</h1>
+          <p className="mt-1 text-sm text-neutral-400">{showingSaved ? `${savedCount} saved song${savedCount === 1 ? '' : 's'} · Catalog Save adds here` : showingRecent ? 'Listening history · Stored in this browser' : selected ? 'Custom playlist · Stored in this browser' : 'Your saved songs, playlists and recent listening, stored in this browser.'}</p>
         </div>
         {!showingDetail && <div className="grid w-full sm:w-auto">
           <div aria-hidden={managing} className={`col-start-1 row-start-1 flex gap-2 ${managing ? 'invisible' : ''}`}>
@@ -149,7 +155,8 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
       </div>
       {error && <div role="alert" className="mb-4 rounded-xl border border-rose-800/60 bg-rose-950/30 p-4 text-sm text-rose-300">{error}<button onClick={refresh} className={`${buttonStyle} ml-2 underline`}>Retry</button></div>}
       <p role="status" className="sr-only">{status}</p>
-      {showingSaved ? children : selected ? renderPlaylist(selected) : (
+      {playbackStorageError && <div role="alert" className="mb-4 rounded-xl border border-rose-800/60 p-4 text-sm text-rose-300">{playbackStorageError}<button onClick={retryPlaybackStorage} className={`${buttonStyle} ml-2 underline`}>Retry saving playback</button></div>}
+      {showingSaved ? children : showingRecent ? <RecentSongs /> : selected ? renderPlaylist(selected) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <button disabled={managing} onClick={() => navigate(SAVED_SONGS_ID)} className="flex min-h-40 flex-col justify-center cursor-pointer rounded-xl border border-emerald-800/60 bg-gradient-to-br from-emerald-950/70 to-neutral-900 p-5 text-left transition-colors hover:border-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:cursor-default">
             <Bookmark aria-hidden="true" className="mb-5 h-6 w-6 text-emerald-400" />
@@ -168,6 +175,11 @@ export function CollectionLibrary({ savedCount, children, renderPlaylist }: { sa
             <h2 className="break-words text-base font-semibold text-white">{list.name}</h2>
             <p className="mt-1 text-sm text-neutral-400">{list.songs.length} song{list.songs.length === 1 ? '' : 's'} · Custom playlist</p>
           </button>)}
+          <button disabled={managing} onClick={() => navigate(RECENT_SONGS_ID)} className="flex min-h-40 min-w-0 cursor-pointer flex-col justify-center rounded-xl border border-neutral-800 bg-[#232628] p-5 text-left hover:border-neutral-500 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-default">
+            <History aria-hidden="true" className="mb-5 h-6 w-6 text-neutral-400" />
+            <h2 className="text-base font-semibold text-white">Recent songs</h2>
+            <p className="mt-1 text-sm text-neutral-400">{recentSongs.length} song{recentSongs.length === 1 ? '' : 's'} · Listening history</p>
+          </button>
         </div>
       )}
       {action && <PlaylistDialog action={action} onClose={() => setAction(null)} onSave={(change) => {

@@ -134,7 +134,9 @@ try {
     await page.keyboard.press('Escape');
   }
   await page.reload();
-  assert.equal(await bar.count(), 0, 'reload must not restore or autoplay the session queue');
+  await bar.waitFor();
+  assert.ok(await media.evaluate(el => el.paused), 'restored queue must stay paused');
+  assert.match(await cycle.getAttribute('aria-label'), /^Repeat: one/);
   assert.deepEqual(errors, []);
-  console.log('PASS: Play next/append order, duplicates, real ended/repeat behavior, paused and completed media, keyboard/focus, unavailable tracks, 1280/390/320px layout and no restoration/autoplay.');
+  console.log('PASS: Play next/append order, duplicates, real ended/repeat behavior, paused and completed media, keyboard/focus, unavailable tracks, 1280/390/320px layout and paused restoration.');
 } finally { await close(); }

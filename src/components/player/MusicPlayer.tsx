@@ -188,6 +188,8 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     canSkipNext,
     isPlaying,
     playbackNotice,
+    playbackStorageError,
+    retryPlaybackStorage,
     isVideoVisible,
     currentTime,
     duration,
@@ -739,9 +741,12 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     <>
       {actionsMenu}
       <span role="status" aria-live="polite" className="sr-only">{actionAnnouncement}</span>
-      {currentTrack && <div aria-hidden="true" className="h-28 shrink-0 sm:h-20" />}
+      {currentTrack && <div aria-hidden="true" className="h-40 shrink-0 lg:h-20" />}
       {isQueueOpen && currentTrack && <QueuePanel onClose={() => setIsQueueOpen(false)} />}
-      {currentTrack && playbackNotice && <div role="status" className="fixed bottom-28 sm:bottom-20 inset-x-0 z-50 bg-neutral-900 border-t border-neutral-700 px-4 py-2 text-center text-sm text-amber-200">{playbackNotice}</div>}
+      {(playbackStorageError || playbackNotice) && <div role={playbackStorageError ? 'alert' : 'status'} className={`fixed ${currentTrack ? 'bottom-40 lg:bottom-20' : 'bottom-0'} inset-x-0 z-50 border-t border-neutral-700 bg-neutral-900 px-4 py-2 text-center text-sm text-amber-200`}>
+        {playbackStorageError || playbackNotice}
+        {playbackStorageError && <button onClick={retryPlaybackStorage} className="ml-2 min-h-11 cursor-pointer rounded px-2 underline focus-visible:outline-2 focus-visible:outline-emerald-300">Retry saving playback</button>}
+      </div>}
       {/*
         SINGLE <video> Element Architecture:
         The video tag is ALWAYS mounted in this container.
@@ -900,11 +905,11 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         <div
           ref={playerBarRef}
           id="spotify-music-player"
-          className="player-bar-enter fixed bottom-0 left-0 right-0 h-28 sm:h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 sm:px-6 grid grid-cols-[minmax(0,1fr)_auto] sm:flex items-center justify-between gap-x-2 sm:gap-4 shadow-2xl select-none"
+          className="player-bar-enter fixed bottom-0 left-0 right-0 h-40 lg:h-20 bg-neutral-900 border-t border-neutral-800 z-50 px-3 lg:px-6 grid grid-cols-1 grid-rows-[40px_68px_48px] lg:flex 2xl:grid 2xl:grid-cols-[minmax(0,1fr)_576px_minmax(0,1fr)] 2xl:grid-rows-1 items-center justify-between lg:gap-4 shadow-2xl select-none"
         >
           {/* LEFT: Anime Poster, Title, and Theme Info */}
-          <div className="flex items-center gap-3 min-w-0 col-span-2 w-full sm:w-[30%]">
-            <div className="relative hidden sm:flex w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700/60 flex-shrink-0 items-center justify-center shadow-inner">
+          <div className="flex items-center gap-3 min-w-0 w-full lg:w-[30%] 2xl:w-full">
+            <div className="relative hidden lg:flex w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700/60 flex-shrink-0 items-center justify-center shadow-inner">
               {posterUrl ? (
                 <img
                   src={posterUrl}
@@ -945,30 +950,17 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const next = repeatMode === 'off' ? 'one' : repeatMode === 'one' ? 'all' : 'off';
-                setRepeatMode(next);
-                setActionAnnouncement(`Repeat ${next}.`);
-              }}
-              aria-label={`Repeat: ${repeatMode}. Switch to ${repeatMode === 'off' ? 'Repeat one' : repeatMode === 'one' ? 'Repeat all' : 'Off'}`}
-              title={`Repeat: ${repeatMode}. Click to change; choose a mode in the queue.`}
-              className={`flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs focus-visible:outline-2 focus-visible:outline-emerald-300 hover:bg-neutral-800 ${repeatMode === 'off' ? 'text-neutral-400' : 'text-emerald-300'}`}
-            >
-              {repeatMode === 'one' ? <Repeat1 aria-hidden="true" className="h-4 w-4" /> : <Repeat aria-hidden="true" className="h-4 w-4" />}
-              <span>{repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'One' : 'All'}</span>
-            </button>
           </div>
 
           {/* CENTER: Prev, Play/Pause, Next controls and Clickable Progress Bar */}
-          <div className="flex min-w-20 sm:min-w-0 flex-col items-center justify-center flex-1 max-w-xl sm:px-2">
+          <div className="flex w-full min-w-0 lg:min-w-[252px] flex-col items-center justify-center flex-1 max-w-xl justify-self-center lg:px-2">
             {/* Playback Controls */}
-            <div className="flex items-center gap-1 sm:gap-4 mb-1.5">
+            <div role="group" aria-label="Playback controls" className="grid grid-cols-[60px_44px_44px_44px_60px] items-center justify-items-center gap-0 mb-1">
+              <span aria-hidden="true" />
               <button
                 type="button"
                 onClick={prevTrack}
-                className="p-1 text-neutral-400 hover:text-neutral-100 transition-colors cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-300"
                 title="Previous Track"
                 aria-label="Previous Track"
               >
@@ -978,7 +970,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
               <button
                 type="button"
                 onClick={togglePlay}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-neutral-950 flex items-center justify-center shadow-lg transition-all cursor-pointer"
+                className="w-11 h-11 sm:w-9 sm:h-9 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-neutral-950 flex items-center justify-center shadow-lg transition-all cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
                 title={isPlaying ? 'Pause' : 'Play'}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
@@ -993,11 +985,25 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
                 type="button"
                 onClick={nextTrack}
                 disabled={!canSkipNext}
-                className="p-1 text-neutral-400 hover:text-neutral-100 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:text-neutral-400"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default disabled:hover:text-neutral-400 focus-visible:outline-2 focus-visible:outline-emerald-300"
                 title="Next Track"
                 aria-label="Next Track"
               >
                 <SkipForward className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = repeatMode === 'off' ? 'one' : repeatMode === 'one' ? 'all' : 'off';
+                  setRepeatMode(next);
+                  setActionAnnouncement(`Repeat ${next}.`);
+                }}
+                aria-label={`Repeat: ${repeatMode}. Switch to ${repeatMode === 'off' ? 'Repeat one' : repeatMode === 'one' ? 'Repeat all' : 'Off'}`}
+                title={`Repeat: ${repeatMode}. Click to change; choose a mode in the queue.`}
+                className={`flex h-11 w-[60px] cursor-pointer items-center justify-center gap-1 rounded-lg text-xs focus-visible:outline-2 focus-visible:outline-emerald-300 hover:bg-neutral-800 ${repeatMode === 'off' ? 'text-neutral-400' : 'text-emerald-300'}`}
+              >
+                {repeatMode === 'one' ? <Repeat1 aria-hidden="true" className="h-4 w-4" /> : <Repeat aria-hidden="true" className="h-4 w-4" />}
+                <span>{repeatMode === 'off' ? 'Off' : repeatMode === 'one' ? 'One' : 'All'}</span>
               </button>
             </div>
 
@@ -1031,7 +1037,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
           </div>
 
           {/* RIGHT: Show Video / Video ON Toggle, Mute Button, Volume Slider, Dismiss */}
-          <div className="flex shrink-0 items-center justify-end gap-0 sm:gap-2 sm:w-[30%]">
+          <div className="flex shrink-0 items-center justify-center lg:justify-end gap-2 lg:w-auto 2xl:w-full">
             <button
               type="button"
               onClick={() => setIsQueueOpen(value => !value)}
@@ -1070,7 +1076,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
             <button
               type="button"
               onClick={() => toggleVideo()}
-              className={`flex min-h-11 min-w-10 sm:min-w-11 justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+              className={`flex shrink-0 whitespace-nowrap min-h-11 min-w-10 sm:min-w-11 justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
                 isVideoVisible
                   ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
                   : 'bg-neutral-800 text-neutral-300 border-neutral-700/80 hover:bg-neutral-700 hover:text-white'

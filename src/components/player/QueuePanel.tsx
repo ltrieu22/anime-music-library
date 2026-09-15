@@ -86,7 +86,7 @@ export function QueuePanel({ onClose }: { onClose: () => void }) {
   );
   return (
     <section ref={panelRef} id="playback-queue" aria-labelledby="queue-heading"
-      className="fixed bottom-28 right-0 z-[60] flex max-h-[calc(100dvh-8rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-neutral-700 bg-[#1e2022] text-neutral-100 shadow-2xl sm:right-4 sm:bottom-24 sm:max-h-[calc(100dvh-7rem)] sm:w-[30rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl">
+      className="fixed bottom-40 right-0 z-[60] flex max-h-[calc(100dvh-11rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-neutral-700 bg-[#1e2022] text-neutral-100 shadow-2xl sm:right-4 lg:bottom-24 lg:max-h-[calc(100dvh-7rem)] sm:w-[30rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-2xl">
       <header className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-2">
         <h2 id="queue-heading" className="flex items-center gap-2 font-semibold"><ListMusic aria-hidden="true" className="h-5 w-5 text-emerald-400" />Playback queue</h2>
         <button ref={closeRef} type="button" onClick={onClose} aria-label="Close queue" title="Close queue (keep playing)" className={controlClass}><X aria-hidden="true" className="h-5 w-5" /></button>

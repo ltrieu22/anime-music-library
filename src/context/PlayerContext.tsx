@@ -12,6 +12,7 @@ import { QueueItem, QueueSource, RepeatMode, SongTrack } from '../types/player';
 import { canAdvanceQueue, currentQueueItem, initialQueueState, queueReducer } from '../services/playerQueue';
 import { readStoredPlayerVolume, sanitizePlayerVolume, writeStoredPlayerVolume } from '../services/playerVolume';
 import { fetchAnimeCoverUrl } from '../services/api';
+import { addRecentSong, readPlayerSession, readRecentSongs, writePlayerSession, writeRecentSongs, RECENT_SONGS_KEY, type RecentSong } from '../services/playbackStorage';
 
 // Debounce for volume persistence so slider drags settle before storage writes.
 const VOLUME_PERSIST_DELAY_MS = 150;
@@ -40,6 +41,11 @@ export interface PlayerContextType {
   setRepeatMode: (mode: RepeatMode) => void;
   isPlaying: boolean;
   playbackNotice: string;
+  recentSongs: RecentSong[];
+  historyNotice: string;
+  playbackStorageError: string;
+  retryPlaybackStorage: () => void;
+  clearRecentSongs: () => boolean;
   isVideoVisible: boolean;
   currentTime: number;
   duration: number;
@@ -71,7 +77,49 @@ export interface PlayerContextType {
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [queueState, dispatchQueue] = useReducer(queueReducer, initialQueueState);
+  const [storedPlayback] = useState(() => ({ session: readPlayerSession(), history: readRecentSongs() }));
+  const [queueState, dispatchQueue] = useReducer(queueReducer, storedPlayback.session.value.queue);
+  const queueRef = useRef(queueState);
+  queueRef.current = queueState;
+  const positionRef = useRef(storedPlayback.session.value.position);
+  const sessionDirtyRef = useRef(false);
+  const historyDirtyRef = useRef(false);
+  const lastSessionWriteRef = useRef(0);
+  const [recentSongs, setRecentSongs] = useState(storedPlayback.history.value);
+  const recentSongsRef = useRef(recentSongs);
+  const [historyNotice, setHistoryNotice] = useState(storedPlayback.history.notice);
+  const [sessionError, setSessionError] = useState('');
+  const [historyError, setHistoryError] = useState('');
+  const persistSession = useCallback(() => {
+    if (!sessionDirtyRef.current) return;
+    // Pace failed attempts too, so a full browser store cannot stall each timeupdate.
+    lastSessionWriteRef.current = Date.now();
+    try {
+      writePlayerSession(queueRef.current, positionRef.current);
+      sessionDirtyRef.current = false;
+      setSessionError('');
+    } catch { setSessionError('Could not save your queue and position in this browser.'); }
+  }, []);
+  const persistHistory = useCallback(() => {
+    if (!historyDirtyRef.current) return;
+    try {
+      writeRecentSongs(recentSongsRef.current);
+      historyDirtyRef.current = false;
+      setHistoryError('');
+    } catch { setHistoryError('Could not save recent songs in this browser.'); }
+  }, []);
+  const retryPlaybackStorage = useCallback(() => { persistSession(); persistHistory(); }, [persistSession, persistHistory]);
+  const clearRecentSongs = useCallback(() => {
+    try {
+      writeRecentSongs([]);
+      recentSongsRef.current = [];
+      historyDirtyRef.current = false;
+      setRecentSongs([]);
+      setHistoryNotice('');
+      setHistoryError('');
+      return true;
+    } catch { return false; }
+  }, []);
   const activeItem = currentQueueItem(queueState);
   const currentTrack = activeItem?.track ?? null;
   useEffect(() => {
@@ -94,10 +142,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     void warmCovers();
     return () => { cancelled = true; };
   }, [queueState.items, queueState.index]);
-  const [playbackNotice, setPlaybackNotice] = useState('');
+  const [playbackNotice, setPlaybackNotice] = useState(storedPlayback.session.notice);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(storedPlayback.session.value.position);
   const [duration, setDuration] = useState<number>(0);
   // Initialize from the versioned preference; falls back to 40% when absent,
   // corrupted, or unsupported.
@@ -256,6 +304,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       videoRef.current.pause();
     }
     setIsPlaying(false);
+    // Clear synchronously, including an immediate close of a restored queue.
+    try { writePlayerSession(initialQueueState, 0); setSessionError(''); }
+    catch { setSessionError('Could not clear the saved queue in this browser.'); }
     dispatchQueue({ type: 'close' });
     setIsVideoVisible(false);
   }, []);
@@ -265,13 +316,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const video = videoRef.current;
     if (!video) return;
 
-    setPlaybackNotice('');
+    const restoring = queueState.playbackRevision === 0 && Boolean(currentTrack);
+    setPlaybackNotice(queueState === storedPlayback.session.value.queue || restoring ? storedPlayback.session.notice : '');
     if (!currentTrack) {
       video.pause();
       video.removeAttribute('src');
       video.load();
       setIsPlaying(false);
       setCurrentTime(0);
+      positionRef.current = 0;
       setDuration(0);
       setIsVideoVisible(false);
       return;
@@ -279,17 +332,40 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const resolvedUrl = resolveVideoUrl(currentTrack.videoUrl);
     if (!resolvedUrl) {
-      console.warn('Track has no valid videoUrl:', currentTrack);
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      setIsPlaying(false);
+      setCurrentTime(0);
+      positionRef.current = 0;
+      setDuration(0);
+      setPlaybackNotice('This song has no available media. Choose another song or use Next.');
       return;
     }
 
+    const restorePosition = () => {
+      if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+      const position = Math.min(storedPlayback.session.value.position, video.duration);
+      video.currentTime = position;
+      positionRef.current = position;
+      setCurrentTime(position);
+    };
+    if (restoring) video.addEventListener('loadedmetadata', restorePosition);
+    positionRef.current = restoring ? storedPlayback.session.value.position : 0;
+    setCurrentTime(positionRef.current);
+    video.preload = 'metadata';
     video.src = resolvedUrl;
-    setCurrentTime(0);
     setDuration(0);
     // Apply the remembered gain before playback so the track never starts at
     // the element's full-volume default; muting silences without discarding it.
     video.volume = volumeRef.current;
     video.muted = isMutedRef.current;
+
+    if (restoring) {
+      video.pause();
+      setIsPlaying(false);
+      return () => video.removeEventListener('loadedmetadata', restorePosition);
+    }
 
     let cancelled = false;
     video
@@ -313,6 +389,10 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
+      positionRef.current = video.currentTime;
+      if (queueRef.current.items.length) sessionDirtyRef.current = true;
+      // Bound writes while listening; pause, seeking and page exit flush immediately.
+      if (Date.now() - lastSessionWriteRef.current >= 5_000) persistSession();
     };
 
     const handleLoadedMetadata = () => {
@@ -326,9 +406,27 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const handlePause = () => {
       setIsPlaying(false);
+      persistSession();
     };
 
+    let recordedRevision = '';
+    const handlePlaying = () => {
+      const state = queueRef.current;
+      const item = currentQueueItem(state);
+      if (!item) return;
+      const revision = `${item.queueItemId}:${state.playbackRevision}`;
+      if (revision === recordedRevision) return;
+      recordedRevision = revision;
+      recentSongsRef.current = addRecentSong(recentSongsRef.current, item.track);
+      setRecentSongs(recentSongsRef.current);
+      setHistoryNotice('');
+      historyDirtyRef.current = true;
+      persistHistory();
+    };
+    const handleSeeked = () => { handleTimeUpdate(); persistSession(); };
+
     const handleEnded = () => {
+      recordedRevision = ''; // Replaying a completed tail is a new listen, too.
       setIsPlaying(false);
       dispatchQueue({ type: 'ended' });
     };
@@ -356,6 +454,8 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
     video.addEventListener('volumechange', handleVolumeChange);
+    video.addEventListener('playing', handlePlaying);
+    video.addEventListener('seeked', handleSeeked);
 
     return () => {
       video.removeEventListener('error', handleError);
@@ -365,7 +465,42 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('volumechange', handleVolumeChange);
+      video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('seeked', handleSeeked);
     };
+  }, []);
+
+  useEffect(() => {
+    // Do not replace unreadable/older data just by visiting the page.
+    if (queueState === storedPlayback.session.value.queue) return;
+    sessionDirtyRef.current = true;
+    persistSession();
+  }, [queueState, persistSession, storedPlayback]);
+
+  useEffect(() => {
+    const flush = () => { persistSession(); persistHistory(); };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
+  }, [persistSession, persistHistory]);
+
+  useEffect(() => {
+    const syncHistory = (event: StorageEvent) => {
+      if (event.key !== RECENT_SONGS_KEY && event.key !== null) return;
+      const saved = readRecentSongs();
+      recentSongsRef.current = saved.value;
+      setRecentSongs(saved.value);
+      setHistoryNotice(saved.notice);
+      historyDirtyRef.current = false;
+      setHistoryError('');
+    };
+    window.addEventListener('storage', syncHistory);
+    return () => window.removeEventListener('storage', syncHistory);
   }, []);
 
   return (
@@ -383,6 +518,11 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setRepeatMode,
         isPlaying,
         playbackNotice,
+        recentSongs,
+        historyNotice,
+        playbackStorageError: [sessionError, historyError].filter(Boolean).join(' '),
+        retryPlaybackStorage,
+        clearRecentSongs,
         isVideoVisible,
         currentTime,
         duration,
