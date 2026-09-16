@@ -29,6 +29,7 @@ import {
 import { usePlayer } from '../../context/PlayerContext';
 import { fetchAnimeCoverUrl } from '../../services/api';
 import { adjustPlayerVolumeForWheel } from '../../services/playerVolume';
+import { connectMediaSession, updateMediaMetadata } from '../../services/mediaSession';
 import { getAniListAnimeUrl } from '../../utils/anilist';
 import { ThemeBadge } from '../ThemeBadge';
 import { QueuePanel } from './QueuePanel';
@@ -188,6 +189,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     canSkipNext,
     isPlaying,
     playbackNotice,
+    sessionNotice,
     playbackStorageError,
     retryPlaybackStorage,
     isVideoVisible,
@@ -197,6 +199,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     isMuted,
     videoRef,
     togglePlay,
+    resumePlayback,
     nextTrack,
     prevTrack,
     seek,
@@ -214,6 +217,26 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const animeDisplayTitle = currentTrack ? displayTitle(currentTrack.animeTitles ?? { anime_name: currentTrack.animeTitle }) : 'Current track';
 
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const posterTrackRef = useRef<SongTrack | null>(null);
+  const deviceControlsRef = useRef({ resumePlayback, prevTrack, nextTrack });
+  deviceControlsRef.current = { resumePlayback, prevTrack, nextTrack };
+  useEffect(() => {
+    if (!currentTrack || !videoRef.current) return;
+    return connectMediaSession(navigator.mediaSession, videoRef.current, {
+      play: () => deviceControlsRef.current.resumePlayback(),
+      previous: () => deviceControlsRef.current.prevTrack(),
+      next: canSkipNext ? () => deviceControlsRef.current.nextTrack() : null,
+    });
+  }, [currentTrack, canSkipNext, videoRef]);
+  useEffect(() => {
+    const artwork = currentTrack?.image || (posterTrackRef.current === currentTrack ? posterUrl : null);
+    updateMediaMetadata(navigator.mediaSession, currentTrack ? {
+      title: currentTrack.songName || animeDisplayTitle,
+      artist: currentTrack.artist || '',
+      album: animeDisplayTitle,
+      artwork: artwork ? [{ src: artwork }] : [],
+    } : null);
+  }, [currentTrack, animeDisplayTitle, posterUrl, canSkipNext]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -340,6 +363,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
   // Load cover art dynamically if not provided on the track
   useEffect(() => {
+    posterTrackRef.current = currentTrack;
     if (!currentTrack) {
       setPosterUrl(null);
       return;
@@ -743,6 +767,11 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       <span role="status" aria-live="polite" className="sr-only">{actionAnnouncement}</span>
       {currentTrack && <div aria-hidden="true" className="h-40 shrink-0 lg:h-20" />}
       {isQueueOpen && currentTrack && <QueuePanel onClose={() => setIsQueueOpen(false)} />}
+      <div role="status" aria-live="polite" aria-atomic="true" className={`pointer-events-none fixed inset-x-4 z-[100] flex justify-center ${currentTrack ? 'bottom-[calc(11rem+env(safe-area-inset-bottom))] lg:bottom-[calc(6rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(1.5rem+env(safe-area-inset-bottom))]'}`}>
+        {sessionNotice && !playbackStorageError && !playbackNotice && <div className="max-w-sm rounded-xl border border-neutral-700/80 bg-[#1e2022] px-4 py-3 text-sm text-neutral-100 shadow-lg">
+          {sessionNotice}
+        </div>}
+      </div>
       {(playbackStorageError || playbackNotice) && <div role={playbackStorageError ? 'alert' : 'status'} className={`fixed ${currentTrack ? 'bottom-40 lg:bottom-20' : 'bottom-0'} inset-x-0 z-50 border-t border-neutral-700 bg-neutral-900 px-4 py-2 text-center text-sm text-amber-200`}>
         {playbackStorageError || playbackNotice}
         {playbackStorageError && <button onClick={retryPlaybackStorage} className="ml-2 min-h-11 cursor-pointer rounded px-2 underline focus-visible:outline-2 focus-visible:outline-emerald-300">Retry saving playback</button>}

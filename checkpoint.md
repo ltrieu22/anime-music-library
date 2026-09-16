@@ -1,8 +1,10 @@
 # Anime Song Database — checkpoint
 
-Updated: 2026-09-15
+Updated: 2026-09-16
 
 ## Current state
+
+Latest change: roadmap item **8 completed**. Supported Media Session controls show song/artist/anime/artwork and handle play, pause, previous, next and seeking through the existing player. Native media events synchronize state/position; close removes metadata and handlers. Partial/absent support degrades gracefully. See [device media controls](docs/device-media-controls.md). The restored-session banner is now a compact “Session restored” notification that disappears after 3.5 seconds.
 
 Implemented: bilingual titles/search, artist matching, season/year filters, pagination, local Saved Songs and named playlists, notes, backups, audio/video playback, editable queues, Play next, explicit repeat modes, drag reordering, remembered volume, recent songs, paused queue/position restoration, and public song/search links.
 
@@ -31,11 +33,11 @@ Earlier batches 18–20 remain canceled: do not revive external enrichment runs,
 | 5 | **Complete — Manage multiple playlists** | **Manage playlists** in My Collection offers checkboxes, selected count, Select all, Cancel/Done and **Delete selected (N)**. Confirmation lists selected names. Atomic deletion protects Saved Songs, notes and other memberships. Cancellation, failed-save retry, persistence, mobile/keyboard access and uninterrupted active-playlist playback/Next verified. |
 | 6 | **Complete — Play next and explicit repeat** | Song/player menus insert immediately after current; Add to queue still appends. Explicit Off / Repeat one / Repeat all controls preserve occurrence IDs and uninterrupted playing/paused media. Natural endings, manual Next, duplicates, clear/remove, keyboard/focus and narrow layouts verified. |
 | 7 | **Complete — Recent songs and session restoration** | Last 100 distinct songs in My Collection, replay, local times, confirmed clear and storage retry. Queue/current position/repeat restore paused after reload/reopening; duplicates, custom IDs, missing media and corrupt/unsupported data verified. Closing clears the saved queue. |
-| 8 | Device media controls | Supported Media Session metadata and play/pause/previous/next/seek actions. Keep device controls synchronized with the player; degrade gracefully where unsupported. |
+| 8 | **Complete — Device media controls** | Media Session metadata/artwork, explicit play/pause, existing previous/next/repeat semantics and clamped seeking. Native state/position synchronization, close/unmount cleanup and partial/absent API support verified. |
 | 9 | Mobile layout polish | Reduce horizontal scrolling in navigation and decade controls. Check narrow screens, long titles, touch targets and player/queue clearance. |
 | 10 | Undo removals | Brief Undo action for removing songs from Saved Songs or playlists. Restore identity, membership and order without affecting other lists or notes; expose storage failures. |
 
-Next priority is **8 — Device media controls**, when requested. Items 8 onward are not implemented. Inspect existing queueing, repeat, restoration and drag behavior before extending it; do not reimplement completed features.
+Next priority is **9 — Mobile layout polish**, when requested. Items 9 onward are not implemented. Inspect existing queueing, repeat, restoration and drag behavior before extending it; do not reimplement completed features.
 
 ## Recent work to preserve
 
@@ -74,6 +76,8 @@ Manage playlists now replaces the existing header buttons with Done, Select all 
 | Local data / backups | `src/services/api.ts`, `notesStorage.ts`, `dataBackup.ts`; `src/components/DataModal.tsx` |
 
 ## Verification and handoff
+
+Item 8 validation (2026-09-16): TypeScript, all **122 service tests**, production build, five browser fixtures, production playback-restoration and Play next/repeat regressions pass. New `tests/media-session.mjs` passes supported/partial/absent API scenarios with real local WAV playback and instrumented device actions. Covers metadata, idempotent play/pause, seek offsets/clamps/invalid values, previous restart, next/repeat boundaries, reload without autoplay and close cleanup. Physical lock-screen/headset behavior remains a manual device check. Existing Vite chunk advisory remains (initial JS approximately 530 kB). Changes remain local and unpublished; item 9 is next.
 
 Item 7 and repeat-placement validation (2026-09-15): TypeScript, all **122 service tests**, production build and the five existing browser fixtures pass. Production `tests/playback-restoration.mjs` passes with actual local WAV audio: paused reload/reopening, exact position and duration clamp, repeat/duplicate identities, history replay/deduplication, clear cancellation/failure/retry, session/history save retry, cross-tab clearing, close persistence, missing media and corrupt/future data. Seven player widths (2560, 1280, 1024, 768, 640, 390, 320 px) pass control bounds/overlap checks; desktop and phone screenshots were visually reviewed. Play next/repeat, playlist management, playlist picker and production catalog-loading regressions pass. Tests use isolated storage and block external providers. The existing Vite chunk advisory remains (initial JS approximately 527 kB). Work is local and unpublished; item 8 is next.
 

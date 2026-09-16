@@ -41,6 +41,7 @@ export interface PlayerContextType {
   setRepeatMode: (mode: RepeatMode) => void;
   isPlaying: boolean;
   playbackNotice: string;
+  sessionNotice: string;
   recentSongs: RecentSong[];
   historyNotice: string;
   playbackStorageError: string;
@@ -65,6 +66,7 @@ export interface PlayerContextType {
   /** Move only upcoming items; target is zero-based within upcomingQueueItems. */
   moveQueueItem: (queueItemId: string, upcomingIndex: number) => void;
   togglePlay: () => void;
+  resumePlayback: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
   seek: (timeInSeconds: number) => void;
@@ -142,7 +144,15 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     void warmCovers();
     return () => { cancelled = true; };
   }, [queueState.items, queueState.index]);
-  const [playbackNotice, setPlaybackNotice] = useState(storedPlayback.session.notice);
+  const restoredSessionNotice = storedPlayback.session.value.queue.items.length ? storedPlayback.session.notice : '';
+  const initialPlaybackNotice = restoredSessionNotice ? '' : storedPlayback.session.notice;
+  const [playbackNotice, setPlaybackNotice] = useState(initialPlaybackNotice);
+  const [sessionNotice, setSessionNotice] = useState(restoredSessionNotice);
+  useEffect(() => {
+    if (!sessionNotice) return;
+    const timeout = window.setTimeout(() => setSessionNotice(''), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [sessionNotice]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isVideoVisible, setIsVideoVisible] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(storedPlayback.session.value.position);
@@ -219,26 +229,29 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     dispatchQueue({ type: 'moveUpcoming', queueItemId, toIndex: upcomingIndex });
   }, []);
 
-  // Toggle playback
+  const resumePlayback = useCallback(() => {
+    if (!currentTrack || !videoRef.current) return;
+    if (!videoRef.current.paused && !videoRef.current.ended) return;
+    if (videoRef.current.error) videoRef.current.load();
+    if (videoRef.current.ended) videoRef.current.currentTime = 0;
+    videoRef.current
+      .play()
+      .then(() => setIsPlaying(true))
+      .catch((err) => {
+        console.warn('Playback resume failed:', err);
+        setIsPlaying(false);
+        setPlaybackNotice(err?.name === 'NotAllowedError' ? 'Playback is paused. Press Play to listen.' : 'This media could not be played. Press Play to retry.');
+      });
+  }, [currentTrack]);
+
+  // UI and device Play share retry/error handling; device Play never toggles Pause.
   const togglePlay = useCallback(() => {
     if (!currentTrack || !videoRef.current) return;
-
-    if (isPlaying) {
+    if (!videoRef.current.paused) {
       videoRef.current.pause();
       setIsPlaying(false);
-    } else {
-      if (videoRef.current.error) videoRef.current.load();
-      if (videoRef.current.ended) videoRef.current.currentTime = 0;
-      videoRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => {
-          console.warn('Playback resume failed:', err);
-          setIsPlaying(false);
-          setPlaybackNotice(err?.name === 'NotAllowedError' ? 'Playback is paused. Press Play to listen.' : 'This media could not be played. Press Play to retry.');
-        });
-    }
-  }, [currentTrack, isPlaying]);
+    } else resumePlayback();
+  }, [currentTrack, resumePlayback]);
 
   // Next track
   const nextTrack = useCallback(() => {
@@ -317,7 +330,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (!video) return;
 
     const restoring = queueState.playbackRevision === 0 && Boolean(currentTrack);
-    setPlaybackNotice(queueState === storedPlayback.session.value.queue || restoring ? storedPlayback.session.notice : '');
+    setPlaybackNotice(queueState === storedPlayback.session.value.queue || restoring ? initialPlaybackNotice : '');
     if (!currentTrack) {
       video.pause();
       video.removeAttribute('src');
@@ -518,6 +531,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setRepeatMode,
         isPlaying,
         playbackNotice,
+        sessionNotice,
         recentSongs,
         historyNotice,
         playbackStorageError: [sessionError, historyError].filter(Boolean).join(' '),
@@ -537,6 +551,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         clearUpcoming,
         moveQueueItem,
         togglePlay,
+        resumePlayback,
         nextTrack,
         prevTrack,
         seek,

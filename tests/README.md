@@ -1,5 +1,7 @@
 # Offline tests
 
+- After building, `node tests/media-session.mjs` verifies device metadata/actions, seeking, repeat boundaries, paused restoration, cleanup and partial/absent API support using an instrumented Media Session, real local WAV audio, isolated storage and blocked external providers.
+
 - `npm test` runs unit tests with `offline-unit-setup.mjs`. Unmocked fetches are blocked and fail the suite, even if application code catches the error. Provider tests must supply fake responses.
 - `node tests/browser-fixtures.mjs` runs the five integration fixtures sequentially against local Vite. External requests are aborted before reaching the network. Browser contexts and the server close when the runner finishes.
 - After building, `node tests/anilist-usage.mjs` verifies hover delays, persistent details and cooldowns across reloads/tabs with locally mocked AniList responses; all other external requests are blocked.

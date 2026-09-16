@@ -108,7 +108,7 @@ export function readPlayerSession(): ReadResult<{ queue: QueueState; position: n
           repeatMode: saved.repeatMode === 'one' || saved.repeatMode === 'all' ? saved.repeatMode : 'off' },
         position: sameCurrent && typeof saved.position === 'number' && Number.isFinite(saved.position) ? Math.max(0, saved.position) : 0,
       },
-      notice: skipped ? 'Queue restored paused. Unavailable saved media was skipped.' : 'Queue restored paused. Press Play to continue.',
+      notice: skipped ? 'Session restored. Unavailable songs were skipped.' : 'Session restored',
     };
   } catch { return { value: empty, notice: 'Saved queue could not be read. You can start a new queue.' }; }
 }
