@@ -79,7 +79,7 @@ function PlaylistDialog({ action, onClose, onSave }: {
               {deletingLists.map((list) => <li key={list.id} className="break-words">{list.name}</li>)}
             </ul>
             <p>{deletingLists.length === 1 ? 'Delete this playlist?' : 'Delete these playlists?'} Saved Songs, other playlists, and your personal notes will stay.</p>
-            <p>Your current playback and queue will continue. This cannot be undone.</p>
+            <p>Your current playback and queue will continue. Undo will be available for 5 seconds after deletion.</p>
           </div>
         ) : (
           <div className="space-y-2">

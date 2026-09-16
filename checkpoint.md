@@ -1,8 +1,10 @@
 # Anime Song Database — checkpoint
 
-Updated: 2026-09-16
+Updated: 2026-09-17
 
 ## Current state
+
+Latest change: roadmap item **10 completed and expanded**, with item **9 deferred at the user's request**. Undo now covers Saved Songs, playlist memberships, single/bulk playlist deletion, queue songs and Clear upcoming. The timer is **5 seconds**, pauses on hover/focus, and retains Retry Undo on storage failure. Buttons have pointer cursors and hover feedback. Restores preserve IDs, snapshots, order and unrelated data. Queue Undo keeps current media uninterrupted; undoing current-song removal places it next, while a closed player restores paused at its prior position. The picker shows Undo inline; queue Undo is a small floating window that does not push queue rows. See [Undo removals](docs/removal-undo.md). Changes are local and unpublished.
 
 Latest change: roadmap item **8 completed**. Supported Media Session controls show song/artist/anime/artwork and handle play, pause, previous, next and seeking through the existing player. Native media events synchronize state/position; close removes metadata and handlers. Partial/absent support degrades gracefully. See [device media controls](docs/device-media-controls.md). The restored-session banner is now a compact “Session restored” notification that disappears after 3.5 seconds.
 
@@ -34,10 +36,10 @@ Earlier batches 18–20 remain canceled: do not revive external enrichment runs,
 | 6 | **Complete — Play next and explicit repeat** | Song/player menus insert immediately after current; Add to queue still appends. Explicit Off / Repeat one / Repeat all controls preserve occurrence IDs and uninterrupted playing/paused media. Natural endings, manual Next, duplicates, clear/remove, keyboard/focus and narrow layouts verified. |
 | 7 | **Complete — Recent songs and session restoration** | Last 100 distinct songs in My Collection, replay, local times, confirmed clear and storage retry. Queue/current position/repeat restore paused after reload/reopening; duplicates, custom IDs, missing media and corrupt/unsupported data verified. Closing clears the saved queue. |
 | 8 | **Complete — Device media controls** | Media Session metadata/artwork, explicit play/pause, existing previous/next/repeat semantics and clamped seeking. Native state/position synchronization, close/unmount cleanup and partial/absent API support verified. |
-| 9 | Mobile layout polish | Reduce horizontal scrolling in navigation and decade controls. Check narrow screens, long titles, touch targets and player/queue clearance. |
-| 10 | Undo removals | Brief Undo action for removing songs from Saved Songs or playlists. Restore identity, membership and order without affecting other lists or notes; expose storage failures. |
+| 9 | **Deferred — Mobile layout polish** | Skipped at the user's request on 2026-09-17. Reduce horizontal scrolling in navigation and decade controls. Check narrow screens, long titles, touch targets and player/queue clearance when requested. |
+| 10 | **Complete — Undo removals** | Latest removal offers 5-second Undo for Saved Songs, playlist membership/single/bulk deletion and queue removals/Clear upcoming. Preserves IDs, order, unrelated data and active media; failed restores retain Retry Undo. Pointer/hover feedback and inline queue/picker actions verified. |
 
-Next priority is **9 — Mobile layout polish**, when requested. Items 9 onward are not implemented. Inspect existing queueing, repeat, restoration and drag behavior before extending it; do not reimplement completed features.
+Item **10 is complete**. Item **9 — Mobile layout polish** remains deferred until requested; do not resume it automatically. Inspect existing queueing, repeat, restoration and drag behavior before extending it; do not reimplement completed features.
 
 ## Recent work to preserve
 
@@ -76,6 +78,10 @@ Manage playlists now replaces the existing header buttons with Done, Select all 
 | Local data / backups | `src/services/api.ts`, `notesStorage.ts`, `dataBackup.ts`; `src/components/DataModal.tsx` |
 
 ## Verification and handoff
+
+Item 10 follow-up validation (2026-09-17): TypeScript, **131 service tests**, production build, whitespace checks, all five browser fixtures, expanded production Undo test, playlist picker/management, playback restoration, Play next/repeat and supported/partial/absent Media Session tests pass. Expanded Undo checks cover single/bulk playlist deletion, original list IDs/memberships/order, upcoming/current/clear queue operations, occurrence IDs, repeat mode, failed restore/retry, exact five-second expiry, cursor feedback and paused tail restoration at the previous position. Queue-inline notification screenshot was visually reviewed. Local server remains available at http://localhost:3000; changes remain unpublished. Existing Vite chunk advisory remains (initial JS approximately 537 kB).
+
+Item 10 validation (2026-09-17): TypeScript, all **126 service tests**, production build and all five browser fixtures pass. New production `tests/removal-undo.mjs` passes saved/playlist/picker Undo, exact IDs/order, removal cancellation, failed removal and restore/retry, modal keyboard access, focus-paused expiry, persistence, preserved notes and uninterrupted real local WAV playback. Existing playlist picker and management browser regressions pass. Desktop notification screenshot was visually reviewed. Tests use isolated storage and block external providers. Existing Vite chunk advisory remains (initial JS approximately 534 kB). Work remains local and unpublished; mobile checkpoint 9 is deferred.
 
 Item 8 validation (2026-09-16): TypeScript, all **122 service tests**, production build, five browser fixtures, production playback-restoration and Play next/repeat regressions pass. New `tests/media-session.mjs` passes supported/partial/absent API scenarios with real local WAV playback and instrumented device actions. Covers metadata, idempotent play/pause, seek offsets/clamps/invalid values, previous restart, next/repeat boundaries, reload without autoplay and close cleanup. Physical lock-screen/headset behavior remains a manual device check. Existing Vite chunk advisory remains (initial JS approximately 530 kB). Changes remain local and unpublished; item 9 is next.
 

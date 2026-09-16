@@ -10,6 +10,42 @@ const start = (tracks = [a, b, c], index = 0) => reduce(initialQueueState, {
   type: 'replace', tracks, startIndex: index, source: 'collection',
 });
 const ids = (state: QueueState) => state.items.map(item => item.track.id);
+
+test('Undo queue removal preserves occurrence IDs, current media, repeat and intervening appends', () => {
+  const before = { ...start([a, b, b, c]), repeatMode: 'all' as const };
+  const removed = before.items[1];
+  let state = reduce(before, { type: 'remove', queueItemId: removed.queueItemId });
+  state = reduce(state, { type: 'append', tracks: [a] });
+  const action = { type: 'restoreRemoval' as const, removed: [removed], order: before.items.map(item => item.queueItemId), priorCurrentId: before.items[0].queueItemId };
+  const after = reduce(state, action);
+  unchangedMedia(state, after);
+  assert.deepEqual(after.items.slice(0, 4), before.items);
+  assert.equal(after.items[4].track, a);
+  assert.equal(after.repeatMode, 'all');
+  assert.equal(reduce(after, action), after);
+});
+
+test('Undo current removal restores it upcoming without interrupting its successor', () => {
+  const before = start();
+  const state = reduce(before, { type: 'remove', queueItemId: before.items[0].queueItemId });
+  const after = reduce(state, { type: 'restoreRemoval', removed: [before.items[0]], order: before.items.map(item => item.queueItemId), priorCurrentId: before.items[0].queueItemId });
+  unchangedMedia(state, after);
+  assert.deepEqual(ids(after), [b.id, a.id, c.id]);
+});
+
+test('Undo clear upcoming and tail close restores retained identities and selected position', () => {
+  const before = start([a, b, c], 1);
+  const cleared = reduce(before, { type: 'clearUpcoming' });
+  const restored = reduce(cleared, { type: 'restoreRemoval', removed: [before.items[2]], order: before.items.map(item => item.queueItemId), priorCurrentId: before.items[1].queueItemId });
+  unchangedMedia(cleared, restored);
+  assert.deepEqual(restored.items, before.items);
+  const tail = start([a, b, c], 2);
+  const closed = reduce(tail, { type: 'remove', queueItemId: tail.items[2].queueItemId });
+  const reopened = reduce(closed, { type: 'restoreRemoval', removed: tail.items, order: tail.items.map(item => item.queueItemId), priorCurrentId: tail.items[2].queueItemId });
+  assert.deepEqual(reopened.items, tail.items);
+  assert.equal(reopened.index, 2);
+  assert.equal(reopened.nextItemId, tail.nextItemId);
+});
 function unchangedMedia(before: QueueState, after: QueueState) {
   assert.equal(currentQueueItem(after), currentQueueItem(before));
   assert.equal(after.playbackRevision, before.playbackRevision);

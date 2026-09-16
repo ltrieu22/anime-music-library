@@ -6,6 +6,8 @@ import { compareAnimeSeason, copyAnimeSeasonMetadata, getAnimeSeason, matchesAni
 import React, { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TitleLanguageProvider, useTitleLanguage } from './context/TitleLanguageContext';
 import { PlaylistsProvider, usePlaylists } from './context/PlaylistsContext';
+import { RemovalUndoNotices, useRemovalUndo } from './context/RemovalUndoContext';
+import { removeSavedSong, restoreSavedSong } from './services/removalUndo';
 import { persistBackupImport, type BackupImport } from './services/dataBackup';
 import { PlaylistDetail } from './components/collection/PlaylistDetail';
 import { createSongReference, type PlaylistSongReference } from './services/playlistsStorage';
@@ -29,7 +31,6 @@ import {
   reorderSavedSongs,
   createEntry,
   updateEntry,
-  deleteEntry,
   resetEntriesToDefault,
 } from './services/api';
 import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
@@ -106,6 +107,7 @@ function sortSongItems<T extends NoteableSong>(
 }
 
 function MainApp() {
+  const { offer: offerUndo, clear: clearUndo } = useRemovalUndo();
   const { closePlayer } = usePlayer();
   const shareSearch = useSearchShare();
   const { refresh: refreshPlaylists } = usePlaylists();
@@ -404,9 +406,11 @@ function MainApp() {
   };
 
   const handleDelete = async (id: number) => {
-    await deleteEntry(id);
-    setCollectionEntries((prev) => prev.filter((e) => e.id !== id));
-    showToast('Song removed from Saved Songs', 'info');
+    const { removed, entries } = removeSavedSong(id);
+    setCollectionEntries(entries);
+    offerUndo(`Removed “${removed.item.song_name}” from Saved Songs.`, () => {
+      setCollectionEntries(restoreSavedSong(removed));
+    });
   };
 
   const handleToggleSaved = async (song: NoteableSong) => {
@@ -425,6 +429,7 @@ function MainApp() {
 
   const handleImportData = async (imported: BackupImport) => {
     persistBackupImport(imported);
+    clearUndo();
     closePlayer();
     setCollectionEntries(imported.entries);
     if (imported.notes !== undefined) setNotes(imported.notes);
@@ -435,6 +440,7 @@ function MainApp() {
 
   const handleReset = async () => {
     const result = await resetEntriesToDefault();
+    clearUndo();
     closePlayer();
     setCollectionEntries(result);
     updateSearch({ yearMin: CATALOG_MIN_YEAR, yearMax: CATALOG_MAX_YEAR });
@@ -809,6 +815,7 @@ function MainApp() {
       </DeferredDialog>
 
       {/* Toast Notification */}
+      {!playlistSong && <RemovalUndoNotices />}
       {toast && (
         <div className="fixed bottom-24 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-100 shadow-xl animate-in slide-in-from-bottom-3 duration-200 text-xs">
           {toast.type === 'success' ? (

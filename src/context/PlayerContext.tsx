@@ -13,6 +13,8 @@ import { canAdvanceQueue, currentQueueItem, initialQueueState, queueReducer } fr
 import { readStoredPlayerVolume, sanitizePlayerVolume, writeStoredPlayerVolume } from '../services/playerVolume';
 import { fetchAnimeCoverUrl } from '../services/api';
 import { addRecentSong, readPlayerSession, readRecentSongs, writePlayerSession, writeRecentSongs, RECENT_SONGS_KEY, type RecentSong } from '../services/playbackStorage';
+import { RemovalUndoProvider, useRemovalUndo } from './RemovalUndoContext';
+import type { QueueAction } from '../services/playerQueue';
 
 // Debounce for volume persistence so slider drags settle before storage writes.
 const VOLUME_PERSIST_DELAY_MS = 150;
@@ -79,6 +81,13 @@ export interface PlayerContextType {
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  return <RemovalUndoProvider><PlayerStateProvider>{children}</PlayerStateProvider></RemovalUndoProvider>;
+};
+
+const PlayerStateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { offer } = useRemovalUndo();
+  const queueGenerationRef = useRef(0);
+  const undoPositionRef = useRef<{ revision: number; position: number } | null>(null);
   const [storedPlayback] = useState(() => ({ session: readPlayerSession(), history: readRecentSongs() }));
   const [queueState, dispatchQueue] = useReducer(queueReducer, storedPlayback.session.value.queue);
   const queueRef = useRef(queueState);
@@ -201,6 +210,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // A title click replaces the queue. Only collection clicks supply a playlist.
   const playTrack = useCallback((track: SongTrack, newQueue?: SongTrack[]) => {
+    queueGenerationRef.current++;
     const idx = newQueue?.findIndex((t) => String(t.id) === String(track.id)) ?? -1;
     if (newQueue && idx >= 0) {
       dispatchQueue({ type: 'replace', tracks: newQueue, startIndex: idx, source: 'collection' });
@@ -211,20 +221,46 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Play an entire queue from an index
   const playQueue = useCallback((tracks: SongTrack[], startIndex: number = 0) => {
+    if (tracks.length) queueGenerationRef.current++;
     dispatchQueue({ type: 'replace', tracks, startIndex, source: 'collection' });
   }, []);
 
   const addToQueue = useCallback((tracks: SongTrack | SongTrack[]) => {
+    if (!queueRef.current.items.length && (!Array.isArray(tracks) || tracks.length)) queueGenerationRef.current++;
     dispatchQueue({ type: 'append', tracks: Array.isArray(tracks) ? tracks : [tracks] });
   }, []);
   const playNext = useCallback((tracks: SongTrack | SongTrack[]) => {
+    if (!queueRef.current.items.length && (!Array.isArray(tracks) || tracks.length)) queueGenerationRef.current++;
     dispatchQueue({ type: 'playNext', tracks: Array.isArray(tracks) ? tracks : [tracks] });
   }, []);
   const setRepeatMode = useCallback((mode: RepeatMode) => dispatchQueue({ type: 'setRepeat', mode }), []);
-  const removeQueueItem = useCallback((queueItemId: string) => {
-    dispatchQueue({ type: 'remove', queueItemId });
-  }, []);
-  const clearUpcoming = useCallback(() => dispatchQueue({ type: 'clearUpcoming' }), []);
+  const removeFromQueue = useCallback((action: QueueAction) => {
+    const before = queueRef.current;
+    const after = queueReducer(before, action);
+    const removed = before.items.filter(item => !after.items.some(current => current.queueItemId === item.queueItemId));
+    dispatchQueue(action);
+    if (!removed.length) return;
+    const position = positionRef.current;
+    const generation = queueGenerationRef.current;
+    const currentId = currentQueueItem(before)!.queueItemId;
+    offer(action.type === 'clearUpcoming' ? `Cleared ${removed.length} upcoming songs.`
+      : `Removed “${before.items.find(item => action.type === 'remove' && item.queueItemId === action.queueItemId)?.track.songName || 'Song'}” from queue.`, () => {
+      if (generation !== queueGenerationRef.current) throw new Error('The queue was replaced or closed. Undo cannot change the new session.');
+      const restore: QueueAction = { type: 'restoreRemoval', removed, order: before.items.map(item => item.queueItemId), priorCurrentId: currentId };
+      const latest = queueRef.current;
+      const next = queueReducer(latest, restore);
+      const restoringClosed = !latest.items.length;
+      const restoredPosition = restoringClosed ? position : positionRef.current;
+      // A failed save keeps Undo available and does not partially restore the UI.
+      try { writePlayerSession(next, restoredPosition); }
+      catch { throw new Error('Could not restore the queue. Allow site storage and try Undo again.'); }
+      if (restoringClosed) undoPositionRef.current = { revision: next.playbackRevision, position: restoredPosition };
+      setSessionError('');
+      dispatchQueue(restore);
+    });
+  }, [offer]);
+  const removeQueueItem = useCallback((queueItemId: string) => removeFromQueue({ type: 'remove', queueItemId }), [removeFromQueue]);
+  const clearUpcoming = useCallback(() => removeFromQueue({ type: 'clearUpcoming' }), [removeFromQueue]);
   const moveQueueItem = useCallback((queueItemId: string, upcomingIndex: number) => {
     dispatchQueue({ type: 'moveUpcoming', queueItemId, toIndex: upcomingIndex });
   }, []);
@@ -313,6 +349,7 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // Close player
   const closePlayer = useCallback(() => {
+    queueGenerationRef.current++;
     if (videoRef.current) {
       videoRef.current.pause();
     }
@@ -329,7 +366,9 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const video = videoRef.current;
     if (!video) return;
 
-    const restoring = queueState.playbackRevision === 0 && Boolean(currentTrack);
+    const undoPosition = undoPositionRef.current?.revision === queueState.playbackRevision ? undoPositionRef.current.position : undefined;
+    const restoring = (queueState.playbackRevision === 0 || undoPosition !== undefined) && Boolean(currentTrack);
+    const restoredPosition = undoPosition ?? storedPlayback.session.value.position;
     setPlaybackNotice(queueState === storedPlayback.session.value.queue || restoring ? initialPlaybackNotice : '');
     if (!currentTrack) {
       video.pause();
@@ -358,13 +397,13 @@ export const PlayerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const restorePosition = () => {
       if (!Number.isFinite(video.duration) || video.duration <= 0) return;
-      const position = Math.min(storedPlayback.session.value.position, video.duration);
+      const position = Math.min(restoredPosition, video.duration);
       video.currentTime = position;
       positionRef.current = position;
       setCurrentTime(position);
     };
     if (restoring) video.addEventListener('loadedmetadata', restorePosition);
-    positionRef.current = restoring ? storedPlayback.session.value.position : 0;
+    positionRef.current = restoring ? restoredPosition : 0;
     setCurrentTime(positionRef.current);
     video.preload = 'metadata';
     video.src = resolvedUrl;

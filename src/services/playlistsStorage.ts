@@ -1,6 +1,7 @@
 import type { AnimeSongEntry, AnimeSongItem, NoteSongSnapshot } from '../types';
 import { createNoteSongSnapshot } from './notesStorage';
 import { reorderSongSubset } from './songOrder';
+import { restoreRemovedItem, type RemovedItem } from './songOrder';
 
 export const PLAYLISTS_STORAGE_KEY = 'anime-db:playlists';
 export const SAVED_SONGS_ID = 'saved-songs';
@@ -117,8 +118,10 @@ export type PlaylistChange =
   | { type: 'rename'; id: string; name: string }
   | { type: 'delete'; id: string }
   | { type: 'deleteMany'; ids: string[] }
+  | { type: 'restoreLists'; removed: CustomPlaylist[]; order: string[] }
   | { type: 'addSong'; id: string; song: PlaylistSongReference }
   | { type: 'removeSong'; id: string; songKey: string }
+  | { type: 'restoreSong'; id: string; removed: RemovedItem<PlaylistSongReference> }
   | { type: 'reorderSongs'; id: string; songKeys: string[] }
   | { type: 'moveSong'; id: string; songKey: string; direction: -1 | 1 };
 
@@ -130,6 +133,18 @@ export function changePlaylists(change: PlaylistChange, storage: StorageAccess =
     const name = validatePlaylistName(change.name, lists);
     if (change.song && !isSongReference(change.song)) throw new Error('This song could not be added.');
     next = [...lists, { id: crypto.randomUUID(), name, songs: change.song ? [structuredClone(change.song)] : [] }];
+  } else if (change.type === 'restoreLists') {
+    const removed = validatePlaylists(change.removed);
+    next = lists;
+    for (const item of removed) {
+      const existing = next.find(list => list.id === item.id);
+      if (existing) {
+        if (JSON.stringify(existing) !== JSON.stringify(item)) throw new Error('This playlist ID is now in use. Undo cannot overwrite it.');
+        continue;
+      }
+      validatePlaylistName(item.name, next);
+      next = restoreRemovedItem(next, { item, order: change.order }, list => list.id);
+    }
   } else if (change.type === 'deleteMany') {
     const ids = new Set(change.ids);
     if (!ids.size) throw new Error('Select at least one playlist.');
@@ -155,6 +170,10 @@ export function changePlaylists(change: PlaylistChange, storage: StorageAccess =
           if (!isSongReference(change.song)) throw new Error('This song could not be added.');
           if (list.songs.some((song) => songReferenceKey(song) === songReferenceKey(change.song))) return list;
           return { ...list, songs: [...list.songs, structuredClone(change.song)] };
+        }
+        if (change.type === 'restoreSong') {
+          if (!isSongReference(change.removed.item)) throw new Error('This song could not be restored.');
+          return { ...list, songs: restoreRemovedItem<PlaylistSongReference>(list.songs, change.removed, songReferenceKey) };
         }
         const index = list.songs.findIndex((song) => songReferenceKey(song) === change.songKey);
         if (index < 0) throw new Error('This song is no longer in the playlist.');

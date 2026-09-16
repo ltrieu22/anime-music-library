@@ -5,6 +5,7 @@ import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { PLAYLIST_NAME_LIMIT, songReferenceKey, type PlaylistSongReference } from '../../services/playlistsStorage';
 import { fetchAnimeCoverUrl } from '../../services/api';
 import { getCachedCover } from '../../services/coverCache';
+import { RemovalUndoNotices } from '../../context/RemovalUndoContext';
 
 const button = 'min-h-11 min-w-11 rounded-lg px-3 py-2 text-sm cursor-pointer focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50';
 
@@ -92,6 +93,7 @@ export function PlaylistSongPicker({ song, onClose }: { song: PlaylistSongRefere
     <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">Choose any playlist. Select an added playlist again to remove the song.</p>
     {(error || storageError) && <p role="alert" className="my-3 text-sm text-rose-300">{error || storageError}{storageError && <button className={button} onClick={refresh}>Retry</button>}</p>}
     <p role="status" className="sr-only">{status}</p>
+    <RemovalUndoNotices inline />
     <div className="my-4 space-y-2">
       {!playlists.length && <div className="rounded-xl border border-dashed border-neutral-700 px-4 py-6 text-center"><ListMusic aria-hidden="true" className="mx-auto mb-2 h-6 w-6 text-emerald-400" /><p className="text-sm font-medium">A place for your favorites</p><p className="mt-1 text-xs text-neutral-400">Create your first playlist below.</p></div>}
       {playlists.map((list) => {

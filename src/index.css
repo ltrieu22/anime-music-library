@@ -73,6 +73,19 @@
   background: #059669;
 }
 
+/* Queue Undo floats independently, leaving the queue's scroll layout unchanged. */
+body:has(#playback-queue) [data-removal-notices="floating"] {
+  top: auto;
+  bottom: 10.5rem;
+  width: min(20rem, calc(100vw - 2rem));
+}
+@media (min-width: 900px) {
+  body:has(#playback-queue) [data-removal-notices="floating"] { right: 32rem; }
+}
+@media (min-width: 1024px) {
+  body:has(#playback-queue) [data-removal-notices="floating"] { bottom: 6rem; }
+}
+
 /* Keep the action slot stable when duration gives way to removal. */
 .queue-row-delete { opacity: 0; pointer-events: none; }
 .queue-row:hover .queue-row-delete,

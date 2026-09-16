@@ -1,4 +1,5 @@
 import type { QueueItem, QueueSource, RepeatMode, SongTrack } from '../types/player';
+import { restoreRemovedItem } from './songOrder';
 
 export interface QueueState {
   items: QueueItem[];
@@ -21,6 +22,7 @@ export type QueueAction =
   | { type: 'setRepeat'; mode: RepeatMode }
   | { type: 'remove'; queueItemId: string }
   | { type: 'clearUpcoming' }
+  | { type: 'restoreRemoval'; removed: QueueItem[]; order: string[]; priorCurrentId: string }
   // Position is zero-based within upcoming items, excluding current/history.
   | { type: 'moveUpcoming'; queueItemId: string; toIndex: number }
   | { type: 'next' }
@@ -86,6 +88,22 @@ export function queueReducer(state: QueueState, action: QueueAction): QueueState
       if (state.source === 'manual' && state.index === state.items.length - 1) return state;
       // Repeat applies only to retained occurrences, including history.
       return { ...state, items: state.items.slice(0, state.index + 1), source: 'manual' };
+    }
+    case 'restoreRemoval': {
+      const missing = action.removed.filter(item => !state.items.some(current => current.queueItemId === item.queueItemId));
+      if (!missing.length) return state;
+      const active = currentQueueItem(state);
+      // Restore to the visible upcoming queue, even if playback has advanced.
+      // Never switch away from a song that is currently playing.
+      let upcoming = active ? state.items.slice(state.index + 1) : [];
+      for (const item of missing) {
+        upcoming = restoreRemovedItem(upcoming, { item, order: action.order }, item => item.queueItemId);
+      }
+      const items = active ? [...state.items.slice(0, state.index + 1), ...upcoming] : upcoming;
+      return { ...state, items, source: 'manual',
+        index: active ? state.index : Math.max(0, items.findIndex(item => item.queueItemId === action.priorCurrentId)),
+        playbackRevision: state.playbackRevision + (active ? 0 : 1),
+      };
     }
     case 'moveUpcoming': {
       const from = state.items.findIndex(item => item.queueItemId === action.queueItemId);
