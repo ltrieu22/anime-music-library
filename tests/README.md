@@ -1,5 +1,7 @@
 # Offline tests
 
+- After building, `node tests/mobile-layout.mjs` checks navigation, filter behavior, mobile touch targets, long unbroken titles, page overflow and queue/player clearance at six widths (320-1280 px). Uses isolated storage and blocks external providers; screenshots go to the system temporary directory.
+
 - After building, `node tests/removal-undo.mjs` verifies Saved Songs, playlist memberships/single/bulk deletion and queue/current/Clear upcoming Undo, original IDs/order, keyboard access, cursor feedback, storage retry, focus-paused five-second expiry, notes, uninterrupted local audio and paused tail restoration. It uses isolated storage and blocks external providers.
 
 - After building, `node tests/media-session.mjs` verifies device metadata/actions, seeking, repeat boundaries, paused restoration, cleanup and partial/absent API support using an instrumented Media Session, real local WAV audio, isolated storage and blocked external providers.

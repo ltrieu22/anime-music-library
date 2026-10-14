@@ -569,7 +569,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                 onClick={() => !playlistView && onSort('theme_type')}
                 className="py-3 px-4 w-32 cursor-pointer hover:text-neutral-200 transition-colors group"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <Music2 className="w-3.5 h-3.5 text-neutral-500" />
                   <span>Theme</span>
                   {renderSortIcon('theme_type')}
@@ -602,7 +602,7 @@ export const SongTable: React.FC<SongTableProps> = ({
                 onClick={() => !playlistView && onSort('song_name')}
                 className="py-3 px-4 cursor-pointer hover:text-neutral-200 transition-colors group"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <Music2 className="w-3.5 h-3.5 text-neutral-500" />
                   <span>Song Name</span>
                   {renderSortIcon('song_name')}
@@ -714,15 +714,16 @@ export const SongTable: React.FC<SongTableProps> = ({
       </div>
 
       {/* Mobile Card View */}
-      <div className="md:hidden">
+      <div className="mobile-song-cards md:hidden">
         {/* Mobile Sort Controls */}
-        {!playlistView && <div className="p-3 bg-neutral-900/80 border-b border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
+        {!playlistView && <div className="p-3 bg-neutral-900/80 border-b border-neutral-800 flex flex-wrap gap-2 items-center justify-between text-xs text-neutral-400">
           <div className="flex items-center gap-1.5">
             <span>Sort by:</span>
             <select
               value={sortKey}
               onChange={(e) => onSort(e.target.value as SortKey)}
-              className="bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
+              aria-label="Sort songs by"
+              className="min-h-11 bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-emerald-500"
             >
               <option value="anime_name">Anime Name</option>
               <option value="anime_year">Season / Year</option>
@@ -733,7 +734,7 @@ export const SongTable: React.FC<SongTableProps> = ({
           </div>
           <button
             onClick={() => !playlistView && onSort(sortKey)}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs transition-colors cursor-pointer"
+            className="flex min-h-11 items-center gap-1 px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs transition-colors cursor-pointer"
           >
             <span>{sortOrder === 'asc' ? 'Ascending' : 'Descending'}</span>
             {sortOrder === 'asc' ? <ArrowUp className="w-3 h-3 text-emerald-400" /> : <ArrowDown className="w-3 h-3 text-emerald-400" />}
@@ -750,7 +751,7 @@ export const SongTable: React.FC<SongTableProps> = ({
             <SortableSongRow as="div" rowKey={rowKey}
               key={rowKey}
               onContextMenu={(event) => openContextMenu(event, item, index, rowKey)}
-              className="p-4 space-y-2.5"
+              className="p-4 space-y-2.5 [overflow-wrap:anywhere]"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -784,7 +785,7 @@ export const SongTable: React.FC<SongTableProps> = ({
               </div>
 
               <div className="text-xs text-emerald-400 font-medium flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <Music2 className="w-3 h-3 flex-shrink-0 text-emerald-500/80" />
                   {renderSongName(item)}
                 </div>

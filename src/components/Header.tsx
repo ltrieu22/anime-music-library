@@ -38,53 +38,54 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="border-b border-neutral-800 bg-[#1c1e20] sticky top-0 z-30 shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-4">
         {/* Navigation & Brand Icon */}
-        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto min-w-0">
           {/* Brand Logo (Marcille) */}
           {!imgHasError ? (
             <img
               src={logoSrc}
               alt="Marcille"
-              className="h-9 w-auto rounded-lg border border-emerald-500/40 bg-neutral-900 shadow-sm flex-shrink-0"
+              className="hidden sm:block h-9 w-auto rounded-lg border border-emerald-500/40 bg-neutral-900 shadow-sm flex-shrink-0"
               onError={() => setImgHasError(true)}
             />
           ) : (
-            <div className="w-9 h-9 rounded-lg border border-emerald-500/40 bg-neutral-900 flex-shrink-0 flex items-center justify-center text-emerald-400">
+            <div className="hidden sm:flex w-9 h-9 rounded-lg border border-emerald-500/40 bg-neutral-900 flex-shrink-0 items-center justify-center text-emerald-400">
               <Disc3 className="w-4 h-4" />
             </div>
           )}
 
           {/* Catalog / Collection Switcher */}
-          <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1 rounded-lg text-xs font-medium min-w-0 max-w-full overflow-x-auto">
+          <nav aria-label="Main navigation" className="grid grid-cols-3 sm:flex flex-1 lg:flex-none items-center bg-neutral-900/90 border border-neutral-800 p-1 rounded-lg text-xs font-medium min-w-0">
             <button
               type="button"
               onClick={() => onModeChange('anisongdb')}
               aria-pressed={mode === 'anisongdb' || mode === 'animethemes'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+              className={`flex min-h-11 min-w-0 justify-center items-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md transition-all cursor-pointer ${
                 mode === 'anisongdb' || mode === 'animethemes'
                   ? 'bg-emerald-500 text-neutral-950 font-semibold shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Globe className="w-3.5 h-3.5" />
+              <Globe className="hidden sm:block w-3.5 h-3.5 shrink-0" />
               <span>Catalog</span>
             </button>
 
             <button
               type="button"
               onClick={() => onModeChange('collection')}
+              aria-label={`My Collection (${entries.length})`}
               aria-pressed={mode === 'collection'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+              className={`flex min-h-11 min-w-0 justify-center items-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md transition-all cursor-pointer ${
                 mode === 'collection'
                   ? 'bg-emerald-500 text-neutral-950 font-semibold shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <Music className="w-3.5 h-3.5" />
-              <span className="hidden min-[380px]:inline">My Collection</span>
-              <span className="min-[380px]:hidden">Mine</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+              <Music className="hidden sm:block w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">My Collection</span>
+              <span className="sm:hidden">Collection</span>
+              <span className={`hidden sm:inline text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                 mode === 'collection' ? 'bg-neutral-950/20 text-neutral-900 font-bold' : 'bg-neutral-800 text-neutral-400'
               }`}>
                 {entries.length}
@@ -96,15 +97,15 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={() => onModeChange('notes')}
               aria-pressed={mode === 'notes'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer ${
+              className={`flex min-h-11 min-w-0 justify-center items-center gap-1 sm:gap-1.5 px-1 sm:px-3 py-1.5 rounded-md transition-all cursor-pointer ${
                 mode === 'notes'
                   ? 'bg-amber-400 text-neutral-950 font-semibold shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              <StickyNote className="w-3.5 h-3.5" />
+              <StickyNote className="hidden sm:block w-3.5 h-3.5 shrink-0" />
               <span>Notes</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+              <span className={`hidden sm:inline text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                 mode === 'notes'
                   ? 'bg-neutral-950/20 text-neutral-900 font-bold'
                   : 'bg-neutral-800 text-neutral-400'
@@ -112,11 +113,11 @@ export const Header: React.FC<HeaderProps> = ({
                 {noteCount}
               </span>
             </button>
-          </div>
+          </nav>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto">
+        <div className="flex items-center justify-end gap-2.5 w-full lg:w-auto">
           <div className="flex flex-col items-end gap-1">
             <div role="group" aria-label="Anime title language" className="flex items-center rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
               {(['en', 'jp'] as const).map((value) => (
@@ -138,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={onOpenDataModal}
             aria-label="Manage data"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-300 bg-neutral-800/80 hover:bg-neutral-700/80 hover:text-white border border-neutral-700/60 transition-all cursor-pointer"
+            className="flex min-h-11 min-w-11 justify-center items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-300 bg-neutral-800/80 hover:bg-neutral-700/80 hover:text-white border border-neutral-700/60 transition-all cursor-pointer"
           >
             <Database className="w-3.5 h-3.5 text-neutral-400" />
             <span className="hidden sm:inline">Manage Data</span>
@@ -148,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-add-song-btn"
             type="button"
             onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
+            className="flex min-h-11 min-w-11 justify-center items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-950 bg-emerald-400 hover:bg-emerald-300 active:scale-98 shadow-sm transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Add Song</span>
