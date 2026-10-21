@@ -57,7 +57,12 @@ try {
   const waitAt = (suffix, position, paused = true) => page.waitForFunction(({ suffix, position, paused }) => {
     const el = document.querySelector('video');
     return el?.currentSrc.endsWith(suffix) && el.readyState >= 2 && !el.seeking && el.paused === paused && Math.abs(el.currentTime - position) < 1;
-  }, { suffix, position, paused });
+  }, { suffix, position, paused }).catch(async error => {
+    const state = await page.locator('video').evaluate(el => ({ src: el.currentSrc, position: el.currentTime,
+      duration: el.duration, paused: el.paused, ended: el.ended, seeking: el.seeking, readyState: el.readyState,
+      error: el.error?.message }));
+    throw new Error(`Expected ${suffix} at ${position}, paused=${paused}; actual: ${JSON.stringify(state)}`, { cause: error });
+  });
   const recent = async () => {
     await page.getByRole('button', { name: /^My Collection/ }).first().click();
     await page.getByRole('button', { name: /^Recent songs/ }).click();
@@ -164,7 +169,16 @@ try {
   await waitAt('/1.wav', 0, false);
   await button('Pause').click();
   // A saved position beyond the media duration clamps safely without autoplay.
-  await page.evaluate(key => { const saved = JSON.parse(localStorage.getItem(key)); saved.position = 9999; localStorage.setItem(key, JSON.stringify(saved)); }, sessionKey);
+  // Seed the next document after the outgoing page flushes its last timeupdate.
+  // Writing before reload races with pagehide and can restore the old position.
+  await page.addInitScript(key => {
+    if (sessionStorage.getItem('restoration-clamp-test') !== 'pending') return;
+    const saved = JSON.parse(localStorage.getItem(key));
+    saved.position = 9999;
+    localStorage.setItem(key, JSON.stringify(saved));
+    sessionStorage.removeItem('restoration-clamp-test');
+  }, sessionKey);
+  await page.evaluate(() => sessionStorage.setItem('restoration-clamp-test', 'pending'));
   await page.reload();
   await waitAt('/1.wav', 120);
   assert.equal(await page.evaluate(() => window.playCalls), 0);

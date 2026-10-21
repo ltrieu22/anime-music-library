@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Search,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AnimeSearchResult, ThemeSongItem, AnimeSongEntry } from '../types';
 import { searchAnime } from '../services/api';
+import { ModalDialog } from './ModalDialog';
 
 interface AddSongModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
   const [searchResults, setSearchResults] = useState<AnimeSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addedThemes, setAddedThemes] = useState<Set<string>>(new Set());
+  const [themeError, setThemeError] = useState('');
 
   // Manual Form states
   const [manualAnime, setManualAnime] = useState('');
@@ -40,6 +42,8 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
   const [manualSong, setManualSong] = useState('');
   const [manualError, setManualError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pendingRef = useRef(false);
+  const requestClose = () => { if (!pendingRef.current) onClose(); };
 
   // Debounced search for API tab
   useEffect(() => {
@@ -71,7 +75,10 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
     theme: ThemeSongItem
   ) => {
     const key = `${anime.name}-${theme.title}-${theme.artist}`;
-    if (addedThemes.has(key)) return;
+    if (addedThemes.has(key) || pendingRef.current) return;
+    pendingRef.current = true;
+    setIsSubmitting(true);
+    setThemeError('');
 
     try {
       await onAddSong({
@@ -83,17 +90,22 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
 
       setAddedThemes((prev) => new Set([...prev, key]));
     } catch (err) {
-      console.error('Error adding theme:', err);
+      setThemeError(err instanceof Error ? err.message : 'Could not save this song. Please retry.');
+    } finally {
+      pendingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pendingRef.current) return;
     if (!manualAnime.trim()) {
       setManualError('Anime name is required');
       return;
     }
 
+    pendingRef.current = true;
     setIsSubmitting(true);
     setManualError('');
 
@@ -113,36 +125,43 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
     } catch (err: any) {
       setManualError(err.message || 'Failed to save song');
     } finally {
+      pendingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-      <div className="bg-[#1e2022] border border-neutral-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <ModalDialog isOpen={isOpen} onClose={requestClose} labelledBy="add-song-title" describedBy="add-song-description"
+      initialFocus="#add-anime-search, #manual-anime" busy={isSubmitting} className="max-w-2xl overflow-hidden">
+      <div className="flex max-h-[calc(100dvh-2rem)] flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/50">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/50">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <h2 id="add-song-title" className="text-base font-bold text-white flex items-center gap-2">
               <Disc3 className="w-5 h-5 text-emerald-400" />
               <span>Add Anime Song</span>
             </h2>
-            <p className="text-xs text-neutral-400 mt-0.5">
+            <p id="add-song-description" className="text-xs text-neutral-400 mt-0.5">
               Pull themes via AnimeThemes & AniList or type manually
             </p>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            type="button"
+            onClick={requestClose}
+            disabled={isSubmitting}
+            aria-label="Close add song dialog"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-neutral-800 bg-[#232628] px-6 gap-6 text-xs font-semibold">
+        <div role="group" aria-label="Song entry method" className="flex shrink-0 border-b border-neutral-800 bg-[#232628] px-6 gap-6 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('api')}
+            aria-pressed={activeTab === 'api'}
+            disabled={isSubmitting}
             className={`py-3 border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
               activeTab === 'api'
                 ? 'border-emerald-400 text-emerald-400'
@@ -155,6 +174,8 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
 
           <button
             onClick={() => setActiveTab('manual')}
+            aria-pressed={activeTab === 'manual'}
+            disabled={isSubmitting}
             className={`py-3 border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
               activeTab === 'manual'
                 ? 'border-emerald-400 text-emerald-400'
@@ -167,19 +188,21 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {activeTab === 'api' ? (
             <div className="space-y-4">
+              {themeError && <p role="alert" className="rounded-lg border border-rose-800/60 bg-rose-950/50 p-3 text-xs text-rose-300">{themeError}</p>}
               {/* Search Bar */}
               <div className="relative">
                 <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
+                  id="add-anime-search"
+                  aria-label="Search anime titles"
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Type an anime title (e.g., Chainsaw Man, Bocchi the Rock, Call of the Night)..."
                   className="w-full pl-10 pr-10 py-2.5 bg-neutral-900 border border-neutral-700/80 rounded-xl text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
-                  autoFocus
                 />
                 {isSearching && (
                   <Loader2 className="w-4 h-4 text-emerald-400 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2" />
@@ -278,7 +301,7 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
                                       onClick={() =>
                                         handleAddFromTheme(anime, theme)
                                       }
-                                      disabled={isAdded}
+                                      disabled={isAdded || isSubmitting}
                                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                                         isAdded
                                           ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 cursor-default'
@@ -322,16 +345,17 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
           ) : (
             <form onSubmit={handleManualSubmit} className="space-y-4">
               {manualError && (
-                <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/60 text-rose-300 text-xs">
+                <div role="alert" className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/60 text-rose-300 text-xs">
                   {manualError}
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                <label htmlFor="manual-anime" className="block text-xs font-medium text-neutral-300 mb-1">
                   Anime Name <span className="text-emerald-400">*</span>
                 </label>
                 <input
+                  id="manual-anime"
                   type="text"
                   required
                   value={manualAnime}
@@ -342,10 +366,11 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                <label htmlFor="manual-year" className="block text-xs font-medium text-neutral-300 mb-1">
                   Anime Year
                 </label>
                 <input
+                  id="manual-year"
                   type="number"
                   min="1960"
                   max="2030"
@@ -359,10 +384,11 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                <label htmlFor="manual-artist" className="block text-xs font-medium text-neutral-300 mb-1">
                   Artist Name
                 </label>
                 <input
+                  id="manual-artist"
                   type="text"
                   value={manualArtist}
                   onChange={(e) => setManualArtist(e.target.value)}
@@ -372,10 +398,11 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                <label htmlFor="manual-song" className="block text-xs font-medium text-neutral-300 mb-1">
                   Song Name / Theme Title
                 </label>
                 <input
+                  id="manual-song"
                   type="text"
                   value={manualSong}
                   onChange={(e) => setManualSong(e.target.value)}
@@ -387,7 +414,8 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
               <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-neutral-800">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
+                  disabled={isSubmitting}
                   className="px-4 py-2 rounded-lg text-xs font-medium text-neutral-300 hover:bg-neutral-800 transition-colors"
                 >
                   Cancel
@@ -404,6 +432,6 @@ export const AddSongModal: React.FC<AddSongModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </ModalDialog>
   );
 };

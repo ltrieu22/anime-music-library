@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ensureLocalSongIdentity,
+  clearLocalEntries,
   createEntry,
   deleteEntry,
   fetchEntries,
@@ -116,6 +117,36 @@ test('collection operations use only localStorage and never call the server API'
       configurable: true,
       value: originalFetch,
     });
+  }
+});
+
+test('failed save, add, edit, import and reset reject without changing persisted songs or notes', async () => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const storage = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  const original = { id: 1, anime_name: 'Original anime', anime_year: 2021, artist: 'Artist', song_name: 'Original song' };
+  try {
+    saveLocalEntries([original]);
+    storage.setItem('anime_song_notes_v1', 'Existing private notes');
+    const before = storage.getItem('anime_songs_db_v1');
+    storage.setItem = () => { throw new Error('QuotaExceededError'); };
+    assert.throws(() => saveLocalEntries([]), /Could not save Saved Songs/);
+    assert.throws(() => clearLocalEntries(), /Could not save Saved Songs/);
+    const { id, ...newSong } = original;
+    for (const action of [
+      () => createEntry(newSong),
+      () => updateEntry(id, { song_name: 'Unsaved change' }),
+      () => importEntries([]),
+      () => resetEntriesToDefault(),
+    ]) {
+      await assert.rejects(action, /Could not save Saved Songs/);
+      assert.equal(storage.getItem('anime_songs_db_v1'), before);
+      assert.equal(storage.getItem('anime_song_notes_v1'), 'Existing private notes');
+    }
+    assert.deepEqual(await fetchEntries(), [original]);
+  } finally {
+    if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
   }
 });
 

@@ -127,7 +127,7 @@ flowchart TD
 - **Playback:** [playerQueue.ts](src/services/playerQueue.ts) is a pure queue reducer. Each playback occurrence has its own ID, so duplicate songs remain independently editable. [PlayerContext.tsx](src/context/PlayerContext.tsx) owns queue transitions, storage, and media events; [MusicPlayer.tsx](src/components/player/MusicPlayer.tsx) keeps one playback `<video>` element mounted for both audio listening and visible video.
 - **Hosting:** the main Catalog view searches in the browser in both deployment modes. Express additionally exposes catalog routes and anime-search/artwork proxies. When those proxies are absent on static hosting, supported lookups fall back to direct browser requests.
 
-The [GitHub Actions workflow](.github/workflows/deploy.yml) installs dependencies, builds on pushes to `main` or `master` (or manual dispatch), and publishes `dist/` to GitHub Pages. Pages serves static files and does not execute the Express server.
+The [GitHub Actions workflow](.github/workflows/deploy.yml) runs TypeScript checks, offline unit tests, a production build, and the full browser suite on pull requests targeting `main` or `master`, pushes to those branches, and manual dispatch. Playwright is pinned in the lockfile and CI installs its matching Chromium browser. Successful pushes/manual runs publish `dist/` to GitHub Pages; pull requests only run checks. Deployment depends on every check passing. Pages serves static files and does not execute the Express server.
 
 ## Data sources and APIs
 
@@ -241,6 +241,8 @@ The checked-in report records **38,821 matched rows, zero unresolved mappings**,
 
 Personal data belongs to the browser profile and site origin. A fresh browser starts with an empty collection; localhost and GitHub Pages have separate storage.
 
+Saved Songs additions and edits report storage failures without changing the displayed library; forms retain their drafts for retry. Reset writes Saved Songs and notes together, attempts rollback if either write fails, and closes playback only after success. Missing media on a saved catalog copy is recovered by exact `source_song_id`. Songs without their own media or an exact playable catalog match show **Media unavailable** instead of borrowing another theme from the same anime.
+
 | Storage key | Contents |
 | --- | --- |
 | `anime_songs_db_v1` | Saved Songs and manual entries. Catalog copies retain `source_song_id`; manual playlist references use a separate `local_song_id`. |
@@ -273,13 +275,19 @@ git diff --check
 
 Unit tests cover catalog fidelity/loading, bilingual search, artist matching, pagination, worker failures, API pacing, storage, backups, queues, history, volume, sharing, and Undo. The unit-test setup blocks unmocked fetches; enrichment tests inject recorded/fake responses rather than calling live providers.
 
-Browser tests require a separate **Playwright** installation and an installed Chromium browser. Playwright is not included in `package.json`; runners import it locally or from `PLAYWRIGHT_MODULE` (an absolute path to its `index.mjs`). `BROWSER_CHANNEL` defaults to `msedge`. Runners use isolated browser storage and mock or block external provider requests.
+Browser tests use the pinned **Playwright** development dependency and its matching Chromium browser. Install the browser once after `npm ci` (use `npx playwright install --with-deps chromium` on Linux if system dependencies are needed). Runners use isolated browser storage and mock or block external provider requests. They default to Playwright's Chromium; `BROWSER_CHANNEL=msedge` can select an installed Edge, and `PLAYWRIGHT_MODULE` can optionally point to another installation's absolute `index.mjs` path.
 
 ```sh
+npx playwright install chromium
+npm run build
+npm run test:browser                 # All fixtures and production UI checks
+
+# Individual runners are also available:
 node tests/browser-fixtures.mjs       # Five fixtures; starts its own Vite server
 
 # Production UI checks; run npm run build first.
 node tests/catalog-loading.mjs
+node tests/collection-reliability.mjs
 node tests/anilist-usage.mjs
 node tests/playlist-picker.mjs
 node tests/playlist-management.mjs

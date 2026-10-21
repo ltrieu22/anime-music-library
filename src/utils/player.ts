@@ -7,7 +7,9 @@ export function toSongTrack(
   source: 'collection' | 'catalog' | 'notes',
   fallback?: AnimeSongItem
 ): SongTrack | null {
-  const mediaUrl = song.video_url || song.audio_url || fallback?.video_url || fallback?.audio_url;
+  const sourceId = 'source_song_id' in song ? song.source_song_id : undefined;
+  const catalogMatch = sourceId !== undefined && String(sourceId) === String(fallback?.id) ? fallback : undefined;
+  const mediaUrl = song.video_url || song.audio_url || catalogMatch?.video_url || catalogMatch?.audio_url;
   if (!mediaUrl) return null;
 
   return {
@@ -23,7 +25,7 @@ export function toSongTrack(
     songName: song.song_name || undefined,
     artist: song.artist || undefined,
     type: song.theme_type || undefined,
-    anilistId: ('anilist_id' in song ? song.anilist_id : undefined) ?? fallback?.anilist_id,
+    anilistId: ('anilist_id' in song ? song.anilist_id : undefined) ?? catalogMatch?.anilist_id,
     videoUrl: mediaUrl,
     actionSong: structuredClone(song),
   };

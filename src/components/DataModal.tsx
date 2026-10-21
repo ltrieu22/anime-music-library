@@ -12,6 +12,7 @@ import type { AnimeSongEntry, NoteMap } from '../types';
 import { createDataBackup, parseDataBackup, type BackupImport } from '../services/dataBackup';
 import { loadPlaylists } from '../services/playlistsStorage';
 import { usePlaylists } from '../context/PlaylistsContext';
+import { ModalDialog } from './ModalDialog';
 
 const countLabel = (count: number, label: string) => `${count} ${label}${count === 1 ? '' : 's'}`;
 
@@ -22,7 +23,6 @@ interface DataModalProps {
   notes: NoteMap;
   onImportData: (data: BackupImport) => Promise<void>;
   onResetToDefault: () => Promise<void>;
-  onClearNotes: () => void | Promise<void>;
 }
 
 export const DataModal: React.FC<DataModalProps> = ({
@@ -32,7 +32,6 @@ export const DataModal: React.FC<DataModalProps> = ({
   notes,
   onImportData,
   onResetToDefault,
-  onClearNotes,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { playlists, error: playlistError } = usePlaylists();
@@ -129,9 +128,11 @@ export const DataModal: React.FC<DataModalProps> = ({
   };
 
   const handleReset = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    setStatusMessage(null);
     try {
       await onResetToDefault();
-      await onClearNotes();
       setIsResetConfirm(false);
       setStatusMessage({
         type: 'success',
@@ -142,14 +143,14 @@ export const DataModal: React.FC<DataModalProps> = ({
         type: 'error',
         text: `Reset failed: ${err.message}`,
       });
-    }
+    } finally { setIsBusy(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-      <div className="bg-[#1e2022] border border-neutral-800 rounded-2xl w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+    <ModalDialog isOpen={isOpen} onClose={close} labelledBy="data-manager-title"
+      initialFocus="button[aria-label='Close data manager']" busy={isBusy} className="max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/50">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
+          <h2 id="data-manager-title" className="text-base font-bold text-white flex items-center gap-2">
             <Database className="w-5 h-5 text-emerald-400" />
             <span>Manage Song Database</span>
           </h2>
@@ -157,7 +158,7 @@ export const DataModal: React.FC<DataModalProps> = ({
             type="button"
             onClick={close}
             disabled={isBusy}
-            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
             aria-label="Close data manager"
           >
             <X className="w-5 h-5" />
@@ -276,12 +277,14 @@ export const DataModal: React.FC<DataModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsResetConfirm(false)}
+                    disabled={isBusy}
                     className="px-2.5 py-1.5 rounded-lg text-xs text-neutral-400 hover:text-white"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleReset}
+                    disabled={isBusy}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 transition-all cursor-pointer"
                   >
                     Reset &amp; Delete
@@ -301,7 +304,6 @@ export const DataModal: React.FC<DataModalProps> = ({
             Close
           </button>
         </div>
-      </div>
-    </div>
+    </ModalDialog>
   );
 };

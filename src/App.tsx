@@ -31,15 +31,13 @@ import {
   reorderSavedSongs,
   createEntry,
   updateEntry,
-  resetEntriesToDefault,
 } from './services/api';
-import { loadStaticCatalog, searchStaticCatalog } from './services/catalogEngine';
+import { loadStaticCatalog, searchStaticCatalog, subscribeStaticCatalog } from './services/catalogEngine';
 import { copyAnimeTitleMetadata } from './services/animeTitles';
 import { matchesSearchText } from './services/searchText';
 import { hydrateArtistCredits, searchSongsByArtistIds } from './services/anisongdbArtists';
 import {
   NOTES_STORAGE_KEY,
-  clearAllNotes,
   clearNote,
   findNoteForSong,
   getSongMetadataFingerprint,
@@ -129,27 +127,17 @@ function MainApp() {
   const [catalogError, setCatalogError] = useState('');
   const [catalogAttempt, setCatalogAttempt] = useState(0);
 
-  // Fallback catalog lookup map for collection songs missing video_url
+  // Recover missing media only by the saved copy's exact catalog identity.
   const [catalogLookupMap, setCatalogLookupMap] = useState<Map<string, AnimeSongItem>>(new Map());
 
   useEffect(() => {
-    if (mode !== 'collection' || catalogLookupMap.size > 0) return;
-    loadStaticCatalog()
-      .then(([catalog]) => {
-        if (catalog && catalog.length > 0) {
-          const map = new Map<string, AnimeSongItem>();
-          for (const c of catalog) {
-            if (!c.video_url && !c.audio_url) continue;
-            const aKey = (c.anime_name || '').toLowerCase().trim();
-            const sKey = `${aKey}:::${(c.song_name || '').toLowerCase().trim()}`;
-            if (!map.has(sKey)) map.set(sKey, c);
-            if (!map.has(aKey)) map.set(aKey, c);
-          }
-          setCatalogLookupMap(map);
-        }
-      })
-      .catch(() => {});
-  }, [mode, catalogLookupMap.size]);
+    if (mode !== 'collection') return;
+    const unsubscribe = subscribeStaticCatalog(([catalog]) => {
+      setCatalogLookupMap(new Map(catalog.map(song => [String(song.id), song])));
+    });
+    void loadStaticCatalog().catch(() => {});
+    return unsubscribe;
+  }, [mode]);
 
   const { state: searchState, update: updateSearch, typeQuery, reset: resetSearch } = useCatalogSearchState(mode, setMode);
   const { draft: searchQuery, q: debouncedSearch, yearMin: selectedMinYear, yearMax: selectedMaxYear,
@@ -329,12 +317,8 @@ function MainApp() {
   const collectionTracks = useMemo<SongTrack[]>(() => {
     const tracks: SongTrack[] = [];
     for (const item of filteredAndSortedCollection) {
-      let catalogMatch: AnimeSongItem | undefined;
-      if (catalogLookupMap.size > 0) {
-        const aKey = (item.anime_name || '').toLowerCase().trim();
-        const sKey = `${aKey}:::${(item.song_name || '').toLowerCase().trim()}`;
-        catalogMatch = catalogLookupMap.get(sKey) || catalogLookupMap.get(aKey);
-      }
+      const catalogMatch = item.source_song_id !== undefined
+        ? catalogLookupMap.get(String(item.source_song_id)) : undefined;
 
       const track = toSongTrack(item, 'collection', catalogMatch);
       if (track) tracks.push(track);
@@ -439,10 +423,12 @@ function MainApp() {
   };
 
   const handleReset = async () => {
-    const result = await resetEntriesToDefault();
+    // Reuse backup rollback so a failed note write cannot leave a half reset.
+    persistBackupImport({ entries: [], notes: {}, skippedEntries: 0, skippedNotes: 0 });
     clearUndo();
     closePlayer();
-    setCollectionEntries(result);
+    setCollectionEntries([]);
+    setNotes({});
     updateSearch({ yearMin: CATALOG_MIN_YEAR, yearMax: CATALOG_MAX_YEAR });
     showToast('Collection reset to empty');
   };
@@ -459,14 +445,6 @@ function MainApp() {
     setNotes(updatedNotes);
     setActiveNoteSong(null);
     showToast('Personal note removed', 'info');
-  };
-
-  const handleClearAllNotes = () => {
-    if (!clearAllNotes()) {
-      throw new Error('This browser could not clear its personal notes. Check site-data permissions.');
-    }
-    setNotes({});
-    setActiveNoteSong(null);
   };
 
   const handleResetFilters = resetSearch;
@@ -810,7 +788,6 @@ function MainApp() {
           notes={notes}
           onImportData={handleImportData}
           onResetToDefault={handleReset}
-          onClearNotes={handleClearAllNotes}
         />
       </DeferredDialog>
 

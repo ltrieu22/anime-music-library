@@ -489,7 +489,9 @@ export const SongTable: React.FC<SongTableProps> = ({
     const songName = item.song_name || (playerTrack ? displayTitle(item) : 'No song name');
 
     if (!playerTrack) {
-      return <span className="text-emerald-400 font-medium">{highlightText(songName, searchQuery)}</span>;
+      return <span className="text-emerald-400 font-medium">{highlightText(songName, searchQuery)}
+        <span className="block text-xs font-normal text-neutral-400">Media unavailable</span>
+      </span>;
     }
 
     return (

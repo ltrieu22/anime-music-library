@@ -19,7 +19,7 @@ export async function startBrowserHarness() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL || 'msedge' });
+    const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
     return {
       browser, base: `http://127.0.0.1:${server.address().port}`,
       close: async () => { await browser.close(); server.close(); },

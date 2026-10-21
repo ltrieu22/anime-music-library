@@ -5,8 +5,9 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE
 const server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
 await server.listen();
 const base = `http://127.0.0.1:${server.httpServer.address().port}`;
-const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL || 'msedge' });
+let browser;
 try {
+  browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
   for (const fixture of ['song-sharing', 'catalog-url', 'player-queue', 'collection-order', 'catalog-worker']) {
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -20,4 +21,4 @@ try {
     console.log(`${fixture}: ${result}`);
     await context.close();
   }
-} finally { await browser.close(); await server.close(); }
+} finally { await browser?.close(); await server.close(); }

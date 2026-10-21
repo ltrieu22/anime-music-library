@@ -28,17 +28,13 @@ export function getLocalEntries(): AnimeSongEntry[] {
 export function saveLocalEntries(entries: AnimeSongEntry[]): void {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(entries));
-  } catch (err) {
-    console.warn('Could not save to localStorage', err);
+  } catch (cause) {
+    throw new Error('Could not save Saved Songs. Check browser storage space or site-data permissions, then try again.', { cause });
   }
 }
 
 export function clearLocalEntries(): void {
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
-  } catch (err) {
-    console.warn('Could not clear localStorage', err);
-  }
+  saveLocalEntries([]);
 }
 
 export async function fetchEntries(): Promise<AnimeSongEntry[]> {

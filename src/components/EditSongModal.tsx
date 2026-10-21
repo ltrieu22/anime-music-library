@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Edit3 } from 'lucide-react';
 import { AnimeSongEntry } from '../types';
+import { ModalDialog } from './ModalDialog';
 
 interface EditSongModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
   const [songName, setSongName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const pendingRef = useRef(false);
+  const requestClose = () => { if (!pendingRef.current) onClose(); };
 
   useEffect(() => {
     if (entry) {
@@ -36,12 +39,15 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pendingRef.current) return;
     if (!animeName.trim()) {
       setError('Anime name is required');
       return;
     }
 
+    pendingRef.current = true;
     setIsSubmitting(true);
+    setError('');
     try {
       await onSave(entry.id, {
         anime_name: animeName.trim(),
@@ -53,21 +59,25 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
     } catch (err: any) {
       setError(err.message || 'Failed to update song');
     } finally {
+      pendingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-      <div className="bg-[#1e2022] border border-neutral-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <ModalDialog isOpen={isOpen} onClose={requestClose} labelledBy="edit-song-title"
+      initialFocus="#edit-anime-name" busy={isSubmitting} className="max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-900/50">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
+          <h2 id="edit-song-title" className="text-base font-bold text-white flex items-center gap-2">
             <Edit3 className="w-4 h-4 text-emerald-400" />
             <span>Edit Song Entry #{entry.id}</span>
           </h2>
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            type="button"
+            onClick={requestClose}
+            disabled={isSubmitting}
+            aria-label="Close edit song dialog"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -75,16 +85,17 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/60 text-rose-300 text-xs">
+            <div role="alert" className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/60 text-rose-300 text-xs">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1">
+            <label htmlFor="edit-anime-name" className="block text-xs font-medium text-neutral-300 mb-1">
               Anime Name <span className="text-emerald-400">*</span>
             </label>
             <input
+              id="edit-anime-name"
               type="text"
               required
               value={animeName}
@@ -94,10 +105,11 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1">
+            <label htmlFor="edit-anime-year" className="block text-xs font-medium text-neutral-300 mb-1">
               Anime Year
             </label>
             <input
+              id="edit-anime-year"
               type="number"
               min="1960"
               max="2030"
@@ -110,10 +122,11 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1">
+            <label htmlFor="edit-artist" className="block text-xs font-medium text-neutral-300 mb-1">
               Artist Name
             </label>
             <input
+              id="edit-artist"
               type="text"
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
@@ -122,10 +135,11 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1">
+            <label htmlFor="edit-song-name" className="block text-xs font-medium text-neutral-300 mb-1">
               Song Name
             </label>
             <input
+              id="edit-song-name"
               type="text"
               value={songName}
               onChange={(e) => setSongName(e.target.value)}
@@ -136,7 +150,8 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
           <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-neutral-800">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
+              disabled={isSubmitting}
               className="px-4 py-2 rounded-lg text-xs font-medium text-neutral-300 hover:bg-neutral-800 transition-colors"
             >
               Cancel
@@ -151,7 +166,6 @@ export const EditSongModal: React.FC<EditSongModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalDialog>
   );
 };
