@@ -2,7 +2,7 @@
 
 A browser-based anime music catalog for finding opening, ending, and insert songs, building personal playlists, and listening through a persistent audio/video player. The bundled catalog contains **38,821 tracks from 1924–2026**, with English and Japanese-display titles.
 
-**[Open the app](https://ltrieu22.github.io/anime_db/)**
+**[Open the app](https://ltrieu22.github.io/anime-music-library/)**
 
 ## Features
 
