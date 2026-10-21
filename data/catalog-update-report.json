@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-21T18:14:45.629Z",
+  "result": "already-current",
+  "endpoint": "https://anisongdb.com/api/catalog_dump",
+  "fetchedAt": "2026-10-21T18:11:36.502Z",
+  "etag": "W/\"cd71b88bdf8ac2a797c1c8b97b2358ffee216a0e41918f72f5936bf1af98699f\"",
+  "compressedBytes": 3833739,
+  "decodedBytes": 23349398,
+  "snapshotSha256": "cd71b88bdf8ac2a797c1c8b97b2358ffee216a0e41918f72f5936bf1af98699f",
+  "canonicalSource": "public/data/anime_catalog.json",
+  "canonicalSha256Before": "da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a",
+  "canonicalSha256After": "da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a",
+  "localRows": 38821,
+  "upstreamRows": 38821,
+  "uniqueUpstreamSongIds": 38821,
+  "added": 0,
+  "changed": 0,
+  "removed": 0,
+  "allExistingFieldsCompared": [
+    "id",
+    "anime_name",
+    "anime_year",
+    "anime_vintage",
+    "artist",
+    "song_name",
+    "theme_type",
+    "video_url",
+    "audio_url",
+    "anilist_id",
+    "anime_name_english",
+    "anime_name_romaji",
+    "anime_alt_names"
+  ],
+  "titleFallbacks": {
+    "english": 10158,
+    "romaji": 10207
+  },
+  "liveApiCrossCheck": {
+    "checkedAt": "2026-10-21T18:12:35Z",
+    "totalSongs": 38821,
+    "sampleSongIds": [
+      15,
+      25,
+      34830,
+      34831
+    ]
+  },
+  "savedSongCompatibility": {
+    "exactCatalogIdsChecked": 38821,
+    "noteKeysAndMetadataFingerprintsPreserved": true,
+    "savedNumbersAndSourceSongIdsPreserved": true,
+    "playlistReferencesAndMediaPreserved": true,
+    "legacyV1V2BackupsParsed": true,
+    "canonicalBytesUnchanged": true,
+    "browserStorageAccessed": false
+  }
+}

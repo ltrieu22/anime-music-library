@@ -135,6 +135,8 @@ The [GitHub Actions workflow](.github/workflows/deploy.yml) installs dependencie
 
 [public/data/anime_catalog.json](public/data/anime_catalog.json) is the source of truth for the shipped catalog. It contains AniSongDB-derived song records identified as `song-<annSongId>`; the numeric portion is the ANN song ID exposed by AniSongDB. The repository ships this snapshot and its title-enrichment tooling, but does not include a general full-catalog download/update command. Normal builds do not refresh it from an API.
 
+See the [dataset maintenance notes](docs/dataset-updates.md) for freshness checks and the proposed update process.
+
 | Current snapshot | Count |
 | --- | ---: |
 | Tracks / unique catalog IDs | 38,821 |
