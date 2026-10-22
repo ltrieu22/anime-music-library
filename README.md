@@ -20,7 +20,7 @@ A browser-based anime music catalog for finding opening, ending, and insert song
 
 ## Run locally
 
-Use **Node.js 24.x** and npm. The version is specified in [.nvmrc](.nvmrc) and [package.json](package.json).
+Use **Node.js 24.22.1 or a newer 24.x release** and npm. The tested version is pinned in [.nvmrc](.nvmrc) and [package.json](package.json).
 
 ```sh
 npm ci
@@ -95,7 +95,7 @@ anime_db/
 ├── index.html                         # Frontend HTML shell and page metadata
 ├── vite.config.ts                     # React, Tailwind, catalog plugin, asset base
 ├── tsconfig.json
-├── .nvmrc                             # Node.js major version
+├── .nvmrc                             # Tested Node.js version
 ├── package.json
 ├── package-lock.json
 └── README.md
