@@ -1,7 +1,9 @@
+import catalogReport from '../../data/catalog-update-report.json' with { type: 'json' };
 import type { SortKey, SortOrder } from '../types';
 
-export const CATALOG_MIN_YEAR = 1924;
-export const CATALOG_MAX_YEAR = 2026;
+export const CATALOG_MIN_YEAR = catalogReport.catalog.minYear;
+export const CATALOG_MAX_YEAR = catalogReport.catalog.maxYear;
+export const CATALOG_TRACK_COUNT = catalogReport.catalog.tracks;
 export interface CatalogUrlState {
   q: string;
   yearMin: number;

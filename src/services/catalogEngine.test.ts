@@ -111,18 +111,27 @@ test('year and theme filters apply to direct and expanded matches', async () => 
 });
 
 test('canonical catalog is complete and unfiltered by default', async () => {
-  assert.equal(catalog.length, 38_821);
-  assert.equal(new Set(catalog.map((song) => song.id)).size, 38_821);
-  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Opening')).length, 8_873);
-  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Ending')).length, 15_317);
-  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Insert')).length, 14_631);
-  assert.equal(catalog.filter((song) => Number(song.anime_year) < 1980).length, 1_173);
+  const { minYear, maxYear, tracks, opening, ending, insert } = readData('../../data/catalog-update-report.json').catalog;
+  assert.equal(catalog.length, tracks);
+  assert.equal(new Set(catalog.map((song) => song.id)).size, tracks);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Opening')).length, opening);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Ending')).length, ending);
+  assert.equal(catalog.filter((song) => String(song.theme_type).startsWith('Insert')).length, insert);
 
   const result = await searchStaticCatalog({ limit: 500 });
-  assert.equal(result.total, 38_821);
+  assert.equal(result.total, tracks);
 
-  const fullUiRange = await searchStaticCatalog({ yearMin: 1924, yearMax: 2026, limit: 500 });
-  assert.equal(fullUiRange.total, 38_821);
+  const fullUiRange = await searchStaticCatalog({ yearMin: minYear, yearMax: maxYear, limit: 500 });
+  assert.equal(fullUiRange.total, tracks);
+});
+
+test('the refreshed catalog includes Fall 2026 and retains a public song missing upstream', async () => {
+  const fall = await searchStaticCatalog({ season: 'Fall', yearMin: 2026, yearMax: 2026, limit: 500 });
+  assert.ok(fall.data.some(song => song.id === 'song-50014'));
+  assert.equal(fall.total, catalog.filter(song => song.anime_vintage === 'Fall 2026').length);
+  const retained = catalog.find(song => song.id === 'song-19261');
+  assert.equal(retained?.song_name, 'Isshin Ittai');
+  assert.ok(retained?.video_url || retained?.audio_url);
 });
 
 test('Mazinger Z is searchable without a year filter and explicit year filters still apply', async () => {

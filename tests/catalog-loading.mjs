@@ -98,4 +98,28 @@ try {
   await page.getByRole('button', { name: 'Save Changes', exact: true }).waitFor();
   console.log('PASS: exact-ID production media resolution despite filters, search preserves media, lazy Add and Edit dialogs');
   await context.close();
+
+  const updatedContext = await browser.newContext();
+  const updatedPage = await updatedContext.newPage();
+  await updatedPage.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
+  const changed = catalog.find(song => song.id === 'song-47506');
+  const legacyCopy = { ...changed, id: 17, artist: "'Yuika'" };
+  delete legacyCopy.legacy_song_fingerprints;
+  await updatedContext.addInitScript(copy => {
+    localStorage.setItem('anime_songs_db_v1', JSON.stringify([copy]));
+    const songKey = 'collection:17';
+    const notes = { [songKey]: { songKey, song: copy, text: 'Legacy note before the catalog refresh', updatedAt: '2026-11-22T00:00:00Z' } };
+    localStorage.setItem('anime_song_notes_v1', JSON.stringify({ version: 1, notes }));
+  }, legacyCopy);
+  await updatedPage.goto(`${base}/anime_db/?q=Ohime-sama+ni+wa+Narenai`);
+  const changedRow = updatedPage.getByRole('row').filter({ has: updatedPage.getByRole('button', { name: 'Ohime-sama ni wa Narenai', exact: true }) });
+  await changedRow.getByRole('button', { name: 'Remove from saved songs' }).waitFor();
+  await changedRow.getByText('Legacy note before the catalog refresh').waitFor();
+  await updatedPage.goto(`${base}/anime_db/?q=DREAM+OF+BUTTERFLY&season=Fall&yearMin=2026`);
+  await updatedPage.getByRole('button', { name: 'DREAM OF BUTTERFLY', exact: true }).waitFor();
+  await updatedPage.goto(`${base}/anime_db/?play=song-19261`);
+  const retained = catalog.find(song => song.id === 'song-19261');
+  await updatedPage.waitForFunction(url => document.querySelector('video')?.getAttribute('src') === url, retained.video_url || retained.audio_url);
+  console.log('PASS: refreshed catalog preserves a legacy saved song and note, finds a Fall 2026 addition and resolves a retained share link');
+  await updatedContext.close();
 } finally { await close(); }

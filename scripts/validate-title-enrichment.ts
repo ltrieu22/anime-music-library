@@ -15,21 +15,22 @@ const args = process.argv.slice(2);
 assert.ok(args.length === 0 || (args.length === 1 && args[0] === '--promote'), 'Only --promote is supported');
 const promote = args.includes('--promote');
 const sourceBytes = await readFile(source);
-const originalPath = new URL('anime_catalog.original.json', work);
-const originalBytes = await readFile(originalPath).catch((error) => {
-  if (error.code === 'ENOENT') return sourceBytes;
+const staged: AnimeSongItem[] = JSON.parse(await readFile(new URL('anime_catalog.enriched.json', work), 'utf8'));
+const progress = JSON.parse(await readFile(new URL('preview.json', work), 'utf8'));
+assert.match(progress.sourceSha256, /^[a-f0-9]{64}$/);
+const originalPath = new URL(`before-${progress.sourceSha256}.json`, work);
+const originalBytes = hash(sourceBytes) === progress.sourceSha256 ? sourceBytes : await readFile(originalPath).catch((error) => {
+  if (error.code === 'ENOENT') return readFile(new URL('anime_catalog.original.json', work));
   throw error;
 });
 const original: AnimeSongItem[] = JSON.parse(originalBytes.toString('utf8'));
-const staged: AnimeSongItem[] = JSON.parse(await readFile(new URL('anime_catalog.enriched.json', work), 'utf8'));
-const progress = JSON.parse(await readFile(new URL('preview.json', work), 'utf8'));
 assert.equal(progress.sourceSha256, hash(originalBytes), 'Preview must describe this exact original catalogue');
-assert.equal(progress.selectedRows, 38_821);
+assert.equal(progress.selectedRows, original.length);
 assert.equal(progress.counts.pending, 0);
-assert.equal(original.length, 38_821);
+assert.ok(original.length > 0);
 assert.equal(staged.length, original.length);
 assert.equal(progress.mappings.length, original.length);
-assert.equal(new Set(staged.map((song) => song.id)).size, 38_821);
+assert.equal(new Set(staged.map((song) => song.id)).size, original.length);
 for (let index = 0; index < original.length; index++) {
   const before = original[index];
   const after = staged[index];
@@ -53,16 +54,9 @@ const opening = count((song) => song.theme_type?.startsWith('Opening') ?? false)
 const ending = count((song) => song.theme_type?.startsWith('Ending') ?? false);
 const insert = count((song) => song.theme_type?.startsWith('Insert') ?? false);
 const pre1980 = count((song) => song.anime_year < 1980);
-assert.deepEqual([opening, ending, insert, pre1980], [8_873, 15_317, 14_631, 1_173]);
-for (const id of ['song-34830', 'song-34831']) {
-  const song = staged.find((song) => song.id === id)!;
-  assert.equal(song.anime_name, 'The Heike Story');
-  assert.equal(song.anime_name_english, 'The Heike Story');
-  assert.equal(song.anime_name_romaji, 'Heike Monogatari');
-}
-assert.ok(staged.some((song) => song.anime_name === 'Mazinger Z' && song.anime_year === 1972));
 // Match the source's compact representation; avoid a formatting-only payload increase.
-const output = Buffer.from(JSON.stringify(staged) + (originalBytes.at(-1) === 10 ? '\n' : ''));
+const newline = originalBytes.at(-1) === 10 ? (originalBytes.at(-2) === 13 ? '\r\n' : '\n') : '';
+const output = Buffer.from(JSON.stringify(staged) + newline);
 assert.ok([hash(originalBytes), hash(output)].includes(hash(sourceBytes)), 'Canonical source changed unexpectedly');
 const unresolved = progress.mappings.filter((mapping) => mapping.status !== 'matched');
 const actualCounts = Object.fromEntries(['matched', 'unmatched', 'ambiguous', 'mismatched', 'pending'].map((status) =>

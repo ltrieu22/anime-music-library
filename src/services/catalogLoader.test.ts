@@ -12,7 +12,7 @@ const payload = packCatalog([song]);
 test('compact catalog round-trips every canonical field, ID and playback URL', () => {
   const catalog = JSON.parse(readFileSync(new URL('../../public/data/anime_catalog.json', import.meta.url), 'utf8'));
   const decoded = unpackCatalog(JSON.parse(JSON.stringify(packCatalog(catalog))));
-  assert.equal(decoded.length, 38_821);
+  assert.equal(decoded.length, catalog.length);
   assert.deepEqual(decoded, catalog);
   assert.deepEqual(resolveSharedSong('song-34830', decoded), catalog.find((item: AnimeSongItem) => item.id === 'song-34830'));
   assert.deepEqual(unpackCatalog(packCatalog([song, { ...song, id: 'song-2', video_url: null, anime_alt_names: ['が', 'fhána'] }])),

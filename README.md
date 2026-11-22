@@ -1,6 +1,6 @@
 # Anime Song Database
 
-A browser-based anime music catalog for finding opening, ending, and insert songs, building personal playlists, and listening through a persistent audio/video player. The bundled catalog contains **38,821 tracks from 1924–2026**, with English and Japanese-display titles.
+A browser-based anime music catalog for finding opening, ending, and insert songs, building personal playlists, and listening through a persistent audio/video player. The bundled catalog contains **39,268 tracks from 1924–2026**, with English and Japanese-display titles.
 
 **[Open the app](https://ltrieu22.github.io/anime-music-library/)**
 
@@ -84,6 +84,7 @@ anime_db/
 │   └── utils/                         # Player conversion and AniList links
 ├── scripts/
 │   ├── catalogAsset.ts                # Vite plugin generating compact catalog data
+│   ├── update-catalog.ts              # Preview and promote AniSongDB snapshots
 │   ├── enrich-titles.ts               # Resumable AniSongDB title enrichment
 │   ├── validate-title-enrichment.ts   # Validate and explicitly promote enrichment
 │   ├── browser-harness.mjs            # Isolated production-browser test server
@@ -121,7 +122,7 @@ flowchart TD
     Player --> Media["Remote AMQ media URLs"]
 ```
 
-- **Catalog loading:** [catalogAsset.ts](scripts/catalogAsset.ts) derives a lossless dictionary-encoded payload from the canonical JSON during builds and serves it on demand in development. It reduces the current raw payload from about **17.40 MB to 8.25 MB** while retaining titles, IDs, seasons, and media URLs. [catalogLoader.ts](src/services/catalogLoader.ts) loads the catalog and aliases together, shares concurrent attempts, caches successes, and leaves failures retryable.
+- **Catalog loading:** [catalogAsset.ts](scripts/catalogAsset.ts) derives a lossless dictionary-encoded payload from the canonical JSON during builds and serves it on demand in development. It reduces the current raw payload from about **17.69 MB to 8.53 MB** while retaining titles, IDs, seasons, and media URLs. [catalogLoader.ts](src/services/catalogLoader.ts) loads the catalog and aliases together, shares concurrent attempts, caches successes, and leaves failures retryable.
 - **Search:** [catalogEngine.ts](src/services/catalogEngine.ts) sends the loaded catalog to one module Web Worker. Shared search services normalize text, expand aliases, merge locally matched note snapshots, deduplicate, filter, sort, and paginate. An eight-query cache reuses ordered results across pages. Request IDs and abort handling prevent stale replies from replacing newer searches. Browsers without Worker support use the synchronous implementation.
 - **Application state:** React contexts manage title language, playback, playlists, sharing, and Undo. `App.tsx` coordinates the Catalog, My Collection, and Notes views. Add, Edit, Notes, Data, and playlist-picker dialogs load on first use.
 - **Playback:** [playerQueue.ts](src/services/playerQueue.ts) is a pure queue reducer. Each playback occurrence has its own ID, so duplicate songs remain independently editable. [PlayerContext.tsx](src/context/PlayerContext.tsx) owns queue transitions, storage, and media events; [MusicPlayer.tsx](src/components/player/MusicPlayer.tsx) keeps one playback `<video>` element mounted for both audio listening and visible video.
@@ -133,18 +134,18 @@ The [GitHub Actions workflow](.github/workflows/deploy.yml) runs TypeScript chec
 
 ### Bundled catalog
 
-[public/data/anime_catalog.json](public/data/anime_catalog.json) is the source of truth for the shipped catalog. It contains AniSongDB-derived song records identified as `song-<annSongId>`; the numeric portion is the ANN song ID exposed by AniSongDB. The repository ships this snapshot and its title-enrichment tooling, but does not include a general full-catalog download/update command. Normal builds do not refresh it from an API.
+[public/data/anime_catalog.json](public/data/anime_catalog.json) is the source of truth for the shipped catalog. It contains AniSongDB-derived song records identified as `song-<annSongId>`; the numeric portion is the ANN song ID exposed by AniSongDB. Run `npm run update:catalog` to preview a full AniSongDB refresh. Routine builds use the checked-in snapshot.
 
-See the [dataset maintenance notes](docs/dataset-updates.md) for freshness checks and the proposed update process.
+See the [dataset maintenance notes](docs/dataset-updates.md) for the preview, promotion, and verification process.
 
 | Current snapshot | Count |
 | --- | ---: |
-| Tracks / unique catalog IDs | 38,821 |
-| Openings | 8,873 |
-| Endings | 15,317 |
-| Insert songs | 14,631 |
-| Rows with English and Japanese-display titles | 38,821 |
-| Rows with nonempty alternate-name lists | 2,493 |
+| Tracks / unique catalog IDs | 39,268 |
+| Openings | 8,972 |
+| Endings | 15,452 |
+| Insert songs | 14,844 |
+| Rows with English and Japanese-display titles | 39,268 |
+| Rows with nonempty alternate-name lists | 2,536 |
 
 Each record stores:
 
@@ -233,9 +234,9 @@ Review `.cache/title-enrichment/preview.json` and `validation.json` before expli
 npm run validate:titles -- --promote
 ```
 
-Cached unresolved results are reused unless `--retry-unresolved` is supplied. The validator is deliberately tied to the current **38,821-row snapshot**, its source hash, category counts, and sample records; changing the catalog baseline requires updating those checks and keeping the original/preview/staged files consistent.
+Cached unresolved results are reused unless `--retry-unresolved` is supplied. The validator uses the preview’s source hash and the original row count, field values, and identities. Start a new enrichment preview after a full catalog refresh.
 
-The checked-in report records **38,821 matched rows, zero unresolved mappings**, full English/Japanese-display coverage, and preservation of all existing fields and persistent identities.
+The historical title-enrichment report records **38,821 matched rows and zero unresolved mappings** for the original enrichment. See the [catalog update report](data/catalog-update-report.json) for the latest full snapshot.
 
 ## Local storage and backups
 

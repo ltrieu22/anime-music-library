@@ -1,6 +1,6 @@
 import { SongShareProvider, useSearchShare } from './context/SongShareContext';
 import { SharedSongLink } from './components/SharedSongLink';
-import { CATALOG_MIN_YEAR, CATALOG_MAX_YEAR } from './services/catalogUrlState';
+import { CATALOG_MIN_YEAR, CATALOG_MAX_YEAR, CATALOG_TRACK_COUNT } from './services/catalogUrlState';
 import { useCatalogSearchState } from './services/useCatalogSearchState';
 import { compareAnimeSeason, copyAnimeSeasonMetadata, getAnimeSeason, matchesAnimeSeason } from './services/animeSeason';
 import React, { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -40,6 +40,7 @@ import {
   NOTES_STORAGE_KEY,
   clearNote,
   findNoteForSong,
+  getLegacySongFingerprints,
   getSongMetadataFingerprint,
   getSongNoteKey,
   loadNotes,
@@ -203,7 +204,10 @@ function MainApp() {
     if (exactMatch) return exactMatch;
 
     const fingerprint = getSongMetadataFingerprint(song);
-    return collectionEntries.find((entry) => getSongMetadataFingerprint(entry) === fingerprint);
+    const legacy = getLegacySongFingerprints(song);
+    return collectionEntries.find((entry) => getSongMetadataFingerprint(entry) === fingerprint)
+      ?? (legacy.length ? collectionEntries.find((entry) => entry.source_song_id === undefined
+        && legacy.includes(getSongMetadataFingerprint(entry))) : undefined);
   }, [collectionEntries]);
 
   const isSongSaved = useCallback(
@@ -590,7 +594,6 @@ function MainApp() {
 
   const songView = (
     <>
-      {/* Filter Controls with Dual-Knob Year Range Slider up to 2026 */}
       <FilterBar
         seasonFilter={seasonFilter}
         onSeasonChange={(season) => updateSearch({ season })}
@@ -731,7 +734,7 @@ function MainApp() {
         {/* Footer Info */}
         <footer className="mt-8 pt-4 border-t border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-2">
           <div className="flex items-center gap-2">
-            <span>Local Catalog &bull; 38,821 tracks (1924 – 2026)</span>
+            <span>Local Catalog &bull; {CATALOG_TRACK_COUNT.toLocaleString('en-US')} tracks ({CATALOG_MIN_YEAR} – {CATALOG_MAX_YEAR})</span>
           </div>
           <div>
             <span>Press </span>

@@ -1,37 +1,18 @@
-# Dataset freshness and future updates
+# Dataset freshness and updates
 
-## Latest check: 2026-10-21
+## November 22, 2026 refresh
 
-The live `GET https://anisongdb.com/api/catalog_dump` snapshot contains **38,821 songs with 38,821 unique ANN song IDs**, matching the shipped catalog. The live `GET /api/database_stats` independently reports the same song count. The latest season represented by that source is Summer 2026; this check does not imply that upstream has added every recently released song.
+AniSongDB’s [catalog dump](https://anisongdb.com/api/catalog_dump) and [statistics](https://anisongdb.com/api/database_stats) both reported **39,257 songs**. The bundled catalog now has **39,268 tracks**. It adds **447**, updates **881**, and retains **11** that are absent from the latest dump. Fall 2026 accounts for **188** of the additions. Five new entries have no media URLs and are searchable with the app’s **Media unavailable** state. The [update report](../data/catalog-update-report.json) records the snapshot hashes, counts, and song IDs that need review.
 
-The compressed snapshot was 3,833,739 bytes (23,349,398 bytes decoded). Comparing all thirteen existing song fields by exact `song-<annSongId>` identity found:
+Matched songs and retained rows keep their ANN song IDs. Older saved songs and notes that rely on metadata can still match 630 songs whose old metadata uniquely identifies them. Six songs had ambiguous old metadata. Their existing collection entries and notes keep their original identities. The browser’s storage formats are unchanged.
 
-| Result | Songs |
-| --- | ---: |
-| New | 0 |
-| Changed | 0 |
-| Missing upstream | 0 |
-| Existing IDs retained | 38,821 |
+The October 21 audit found an exact match at 38,821 tracks. Its [verification report](https://github.com/ltrieu22/anime-music-library/blob/dd799834c90851a0503bcc495097e620961b3460/data/catalog-update-report.json) is available in Git history.
 
-No canonical catalog rewrite was needed. Its SHA-256 remains `da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a`. The original bytes, downloaded snapshot and comparison script are retained locally in the ignored `.cache/catalog-update/` directory. The durable evidence is [catalog-update-report.json](../data/catalog-update-report.json).
+## Updating the catalog
 
-The dump uses separate `anime`, `artists` and `songs` structures. Its raw anime names can be null even when the ordinary song API returns both display names: the API falls back to the other available language. Applying that same fallback preserves the existing English titles on 10,158 songs and romaji/display titles on 10,207 songs. API lookups for ANN song IDs 15, 25, 34830 and 34831 confirmed the interpretation. These are fallback counts, not changed songs. Copying the raw nullable fields directly would lose existing title coverage.
+1. Run `npm run update:catalog`. When the published report’s hash matches the canonical file, the command sends the recorded ETag. A `304` ends the check without modifying the catalog. For a new dump, the command validates the schema, compares the song count with AniSongDB’s statistics, and stages the candidate in `.cache/catalog-update/`.
+2. Review `.cache/catalog-update/preview.json` for changed fields, additions, absent IDs, preserved media, and ambiguous older metadata. Rows keep their order and IDs. New rows are appended in ANN song ID order. An existing media URL is retained when the new dump omits that media type.
+3. Run `npm run update:catalog -- --promote`. Promotion checks the source and candidate hashes, validates the compact catalog round trip, and writes an immutable backup in `.cache/catalog-update/` before replacing the canonical file. It records the ETag in the checked-in report after replacement. If promotion stops after the catalog replacement, rerun `--promote` to finish publishing the report.
+4. Run `npm run lint`, `npm test`, `npm run build`, and `npm run test:browser`. Review the resulting catalog and report together in a pull request. Vite regenerates the compact asset during the build, and GitHub Actions deploys the checked-in catalog to Pages.
 
-## Saved-data compatibility
-
-The comparison checked every existing catalog ID, note key, metadata fingerprint, saved-copy source ID, playlist reference and playback mapping. It also parsed the legacy, v1 and v2 backup fixtures. The canonical JSON remains byte-for-byte unchanged. No browser storage was accessed by the comparison, and no storage schema, saved numbers, playlist IDs, queue IDs, imports or migrations were changed.
-
-Validation includes TypeScript checking, all 131 service tests, the production build, and isolated production-browser checks for catalog loading/exact-ID media, playlist management/persistence, and playback/history restoration. Browser checks use disposable profiles, local test audio and blocked provider requests; they do not touch people's normal site storage. They verify application compatibility, not the availability of every remote media file.
-
-## Proposed easier workflow (not implemented)
-
-Add a manual `npm run update:catalog` command that checks and previews changes, with a separate `--promote` step for reviewed data. It can reuse the ETag recorded in the verification report:
-
-1. Request `/api/catalog_dump` with `If-None-Match`. A `304` needs no dataset download. Only trust a recorded ETag when its associated canonical hash still matches the current file. Handle failed requests as errors, never as empty catalogs.
-2. When changed, cache the compressed snapshot and metadata, reconstruct the existing song shape, and compare by exact ANN song ID. Preserve IDs and existing row order; append new IDs. Keep old rows missing upstream available and report them for review rather than automatically breaking old references. Flag conflicting identities and missing titles/media instead of silently discarding valid existing data.
-3. Write a staged catalog and an additions/changes/retained-rows report. Run identity, title, search, playback, backup and compact-payload checks before promotion. The current tests, historical title-enrichment validator and footer contain fixed snapshot counts; review those when the catalog actually grows.
-4. Preserve an immutable source backup and promote validated data atomically. Record the new ETag only after successful promotion, then rebuild the generated compact browser asset. A no-change check should leave the canonical file alone.
-
-A later GitHub Actions job could run that command and open a data-only pull request for review. This idea is deliberately deferred: no scheduled job, automatic deployment, runtime refresh or general updater was added in this check.
-
-The endpoint is live but omitted from Swagger. Its implementation and dump format can be checked in [AnisongDB's backend](https://github.com/xSardine/AMQ-Artists-DB/blob/main/backEnd/app/main.py#L544) and [catalog builder](https://github.com/xSardine/AMQ-Artists-DB/blob/main/backEnd/app/catalog.py#L191). The existing `enrich:titles` command only enriches known IDs and reuses its own historical cache; it is not a full-catalog refresh.
+The workflow runs on demand. A scheduled job that opens data-only pull requests remains a future option. The bulk endpoint is defined in [AniSongDB’s backend](https://github.com/xSardine/AMQ-Artists-DB/blob/main/backEnd/app/main.py#L544). The dump stores songs and anime separately. The updater joins them by ANN anime ID and uses the same English and Japanese-display title fallback as AniSongDB’s song endpoint. `npm run enrich:titles` remains available for title enrichment by known song ID.

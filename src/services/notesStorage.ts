@@ -120,6 +120,10 @@ export function getSongMetadataFingerprint(song: NoteableSong): string {
   ].join('\u001f');
 }
 
+export function getLegacySongFingerprints(song: NoteableSong): readonly string[] {
+  return 'legacy_song_fingerprints' in song ? song.legacy_song_fingerprints ?? [] : [];
+}
+
 function canUseMetadataFallback(song: NoteableSong): boolean {
   return Boolean(
     normalizeMetadataPart(song.anime_name)
@@ -241,7 +245,11 @@ export function findNoteForSong(notes: NoteMap, song: NoteableSong): PersonalSon
   if (!canUseMetadataFallback(song)) return undefined;
 
   const fingerprint = getSongMetadataFingerprint(song);
-  return Object.values(notes).find((note) => getSongMetadataFingerprint(note.song) === fingerprint);
+  const candidates = Object.values(notes);
+  const legacy = getLegacySongFingerprints(song);
+  return candidates.find((note) => getSongMetadataFingerprint(note.song) === fingerprint)
+    ?? (legacy.length ? candidates.find((note) => note.songKey.startsWith('collection:')
+      && legacy.includes(getSongMetadataFingerprint(note.song))) : undefined);
 }
 
 export function upsertNote(notes: NoteMap, song: NoteableSong, text: string): NoteMap {

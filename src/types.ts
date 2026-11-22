@@ -35,6 +35,8 @@ export interface AnimeSongItem extends AnimeTitleMetadata, AnimeSeasonMetadata {
   audio_url?: string | null;
   anilist_id?: number | null;
   source?: 'anisongdb' | 'animethemes' | 'collection';
+  /** Unambiguous historical matches for saved songs and notes without catalog IDs. */
+  legacy_song_fingerprints?: string[];
   /** Structured AnisongDB credits. The numeric ID identifies the artist across aliases and groups. */
   artists?: ArtistCredit[];
 }

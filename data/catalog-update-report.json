@@ -1,58 +1,66 @@
 {
-  "version": 1,
-  "checkedAt": "2026-10-21T18:14:45.629Z",
-  "result": "already-current",
+  "version": 2,
+  "checkedAt": "2026-11-22T14:21:31.314Z",
+  "result": "updated",
   "endpoint": "https://anisongdb.com/api/catalog_dump",
-  "fetchedAt": "2026-10-21T18:11:36.502Z",
-  "etag": "W/\"cd71b88bdf8ac2a797c1c8b97b2358ffee216a0e41918f72f5936bf1af98699f\"",
-  "compressedBytes": 3833739,
-  "decodedBytes": 23349398,
-  "snapshotSha256": "cd71b88bdf8ac2a797c1c8b97b2358ffee216a0e41918f72f5936bf1af98699f",
+  "etag": "W/\"836bf7f72b8190aa8cf5c9840929c904f2467db18a6c41a3679b2c468fda1f34\"",
+  "decodedBytes": 23618019,
+  "snapshotSha256": "836bf7f72b8190aa8cf5c9840929c904f2467db18a6c41a3679b2c468fda1f34",
   "canonicalSource": "public/data/anime_catalog.json",
   "canonicalSha256Before": "da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a",
-  "canonicalSha256After": "da1df9014934e291f5213e91eb70dd71bd23ad33dfdd311e43f331c9de23c34a",
+  "canonicalSha256After": "d67c72fa8c7a1032d21a3e162a518e3d88b10f6c0b1d11a998521cfb559febe2",
   "localRows": 38821,
-  "upstreamRows": 38821,
-  "uniqueUpstreamSongIds": 38821,
-  "added": 0,
-  "changed": 0,
-  "removed": 0,
-  "allExistingFieldsCompared": [
-    "id",
-    "anime_name",
-    "anime_year",
-    "anime_vintage",
-    "artist",
-    "song_name",
-    "theme_type",
-    "video_url",
-    "audio_url",
-    "anilist_id",
-    "anime_name_english",
-    "anime_name_romaji",
-    "anime_alt_names"
+  "upstreamRows": 39257,
+  "added": 447,
+  "changed": 881,
+  "retained": 11,
+  "retainedIds": [
+    "song-30314",
+    "song-19261",
+    "song-12950",
+    "song-33012",
+    "song-33013",
+    "song-33016",
+    "song-33017",
+    "song-33018",
+    "song-35994",
+    "song-35995",
+    "song-28610"
   ],
-  "titleFallbacks": {
-    "english": 10158,
-    "romaji": 10207
+  "addedWithoutMedia": [
+    "song-50284",
+    "song-50326",
+    "song-50337",
+    "song-50340",
+    "song-50355"
+  ],
+  "preservedMedia": [],
+  "changedFields": {
+    "artist": 361,
+    "song_name": 30,
+    "anime_name": 291,
+    "anime_name_english": 291,
+    "anime_name_romaji": 373,
+    "anime_alt_names": 30,
+    "video_url": 30,
+    "audio_url": 32,
+    "theme_type": 6,
+    "anime_year": 13,
+    "anime_vintage": 13,
+    "anilist_id": 3
   },
-  "liveApiCrossCheck": {
-    "checkedAt": "2026-10-21T18:12:35Z",
-    "totalSongs": 38821,
-    "sampleSongIds": [
-      15,
-      25,
-      34830,
-      34831
-    ]
+  "legacyFingerprints": {
+    "songsWithHistory": 630,
+    "songsWithAmbiguities": 6
   },
-  "savedSongCompatibility": {
-    "exactCatalogIdsChecked": 38821,
-    "noteKeysAndMetadataFingerprintsPreserved": true,
-    "savedNumbersAndSourceSongIdsPreserved": true,
-    "playlistReferencesAndMediaPreserved": true,
-    "legacyV1V2BackupsParsed": true,
-    "canonicalBytesUnchanged": true,
-    "browserStorageAccessed": false
+  "catalog": {
+    "tracks": 39268,
+    "minYear": 1924,
+    "maxYear": 2026,
+    "opening": 8972,
+    "ending": 15452,
+    "insert": 14844,
+    "bilingual": 39268,
+    "withAlternateNames": 2536
   }
 }
