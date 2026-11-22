@@ -166,9 +166,21 @@ try {
   await button('Clear upcoming').click();
   await button('Undo').waitFor();
   assert.equal((await session()).items.length, 1);
+  const removeCurrent = panel.getByRole('button', { name: /^Remove current song/ });
+  // Move focus as soon as the notice disappears, before its fallback runs.
+  await removeCurrent.evaluate(el => {
+    const notices = document.querySelector('[data-removal-notices="floating"]');
+    const observer = new MutationObserver(() => {
+      if (notices.querySelector('button')) return;
+      observer.disconnect();
+      el.focus({ preventScroll: true });
+    });
+    observer.observe(notices, { childList: true });
+  });
   await button('Undo').click();
   assert.deepEqual((await session()).items, originalQueue.items);
-  await panel.getByRole('button', { name: /^Remove current song/ }).focus();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+  assert.ok(await removeCurrent.evaluate(el => el === document.activeElement), 'Undo preserves focus already moved to the next control');
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('video')?.currentSrc.includes('/9.wav'));
   const successor = await media.evaluate(el => el.currentSrc);

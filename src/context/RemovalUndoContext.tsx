@@ -43,7 +43,7 @@ export function RemovalUndoNotices({ inline = false }: { inline?: boolean }) {
   const act = (target: HTMLButtonElement, action: () => void) => {
     action();
     window.requestAnimationFrame(() => {
-      if (target.isConnected) return;
+      if (target.isConnected || document.activeElement !== document.body) return;
       const fallback = document.querySelector<HTMLElement>('dialog[open] button')
         ?? document.querySelector<HTMLElement>('#playback-queue button')
         ?? document.getElementById('collection-library-heading') ?? document.getElementById('search-input');

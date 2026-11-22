@@ -154,6 +154,7 @@ try {
   assert.equal(await button('Manage data').evaluate(el => el === document.activeElement), true);
 
   // All three modal layouts and their keyboard behavior at narrow widths.
+  const dialogNames = { add: 'Add Anime Song', edit: 'Edit Song Entry #1', data: 'Manage Song Database' };
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 568 });
     for (const kind of ['add', 'edit', 'data']) {
@@ -164,10 +165,16 @@ try {
         await trigger.scrollIntoViewIfNeeded();
         // Let scrolling settle before opening a menu that intentionally closes on scroll.
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        await trigger.click();
-        await page.getByRole('menuitem', { name: 'Edit song', exact: true }).press('Enter');
+        await trigger.press('Enter');
+        const menu = page.getByRole('menu', { name: 'Song actions' });
+        const firstAction = menu.getByRole('menuitem', { name: 'Share song', exact: true });
+        const editAction = menu.getByRole('menuitem', { name: 'Edit song', exact: true });
+        assert.equal(await firstAction.evaluate(el => el === document.activeElement), true, 'opening the menu focuses its first action');
+        await page.keyboard.press('End');
+        assert.equal(await editAction.evaluate(el => el === document.activeElement), true, 'End focuses the edit action');
+        await page.keyboard.press('Enter');
       }
-      dialog = page.getByRole('dialog');
+      dialog = page.getByRole('dialog', { name: dialogNames[kind] });
       await dialog.waitFor();
       if (kind === 'add') await dialog.getByRole('button', { name: 'Manual Entry' }).click();
       if (kind === 'data') await dialog.getByRole('button', { name: 'Reset...', exact: true }).click();

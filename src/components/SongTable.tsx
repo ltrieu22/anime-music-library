@@ -224,14 +224,6 @@ export const SongTable: React.FC<SongTableProps> = ({
     };
   }, [openMenu, closeMenu]);
 
-  React.useEffect(() => {
-    if (!openMenu) return;
-    const frame = window.requestAnimationFrame(() => {
-      menuRef.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [openMenu?.rowKey, openMenu?.x, openMenu?.y]);
-
   React.useLayoutEffect(() => {
     if (!openMenu || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
@@ -246,7 +238,11 @@ export const SongTable: React.FC<SongTableProps> = ({
 
     if (x !== openMenu.x || y !== openMenu.y) {
       setOpenMenu((current) => current ? { ...current, x, y } : current);
+      return;
     }
+
+    menuRef.current.querySelector<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)')
+      ?.focus({ preventScroll: true });
   }, [openMenu]);
 
   const openAnchoredMenu = (
